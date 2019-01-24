@@ -31,7 +31,7 @@
 static bool notify_state;
 static uint16_t notify_conn_handle;
 
-static const char *device_name = "blehr_sensor";
+static const char *device_name = "rtt_blehr_sensor";
 
 static int blehr_gap_event(struct ble_gap_event *event, void *arg);
 
