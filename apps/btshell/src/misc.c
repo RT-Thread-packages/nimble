@@ -17,11 +17,12 @@
  * under the License.
  */
 
-#include "console/console.h"
 #include "host/ble_uuid.h"
 #include "host/ble_gap.h"
 
 #include "btshell.h"
+
+#include "nimble/npl_shell.h"
 
 /**
  * Utility function to log an array of bytes.

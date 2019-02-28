@@ -22,11 +22,11 @@
 
 #include "host/ble_gap.h"
 #include "host/ble_l2cap.h"
-#include "console/console.h"
 #include "btshell.h"
 #include "cmd.h"
 #include "cmd_l2cap.h"
 
+#include "nimble/npl_shell.h"
 
 /*****************************************************************************
  * $l2cap-update                                                             *

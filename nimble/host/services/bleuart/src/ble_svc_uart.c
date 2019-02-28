@@ -27,7 +27,25 @@
 #include "host/ble_uuid.h"
 #include "bleuart/bleuart.h"
 #include "os/endian.h"
-#include "console/console.h"
+
+#include <rtthread.h>
+#include <rtdevice.h>
+#include <rthw.h>
+
+#define MYNEWT_VAL_BLEUART_MAX_INPUT 128
+
+#define ESC_KEY                      0x1B
+#define BACKSPACE_KEY                0x08
+#define DELECT_KEY                   0x7F
+
+static void bleuart_deinit(void);
+    
+struct bleuart_console
+{
+    struct rt_semaphore *rx_end;
+    struct rt_ringbuffer *rx_fifo;
+    rt_err_t (*old_rx_ind)(rt_device_t dev, rt_size_t size);
+};
 
 /* ble uart attr read handle */
 uint16_t g_bleuart_attr_read_handle;
@@ -37,6 +55,9 @@ uint16_t g_bleuart_attr_write_handle;
 
 /* Pointer to a console buffer */
 char *console_buf;
+
+/* ble uart console */
+static struct bleuart_console bleuart;
 
 uint16_t g_console_conn_handle;
 /**
@@ -102,10 +123,10 @@ gatt_svr_chr_access_uart_write(uint16_t conn_handle, uint16_t attr_handle,
     switch (ctxt->op) {
         case BLE_GATT_ACCESS_OP_WRITE_CHR:
               while(om) {
-                  console_write((char *)om->om_data, om->om_len);
+                  rt_device_write(rt_console_get_device(), 0, (char *)om->om_data, om->om_len);
                   om = SLIST_NEXT(om, om_next);
               }
-              console_write("\n", 1);
+              rt_device_write(rt_console_get_device(), 0, "\n", 1);
               return 0;
         default:
             assert(0);
@@ -138,29 +159,69 @@ err:
     return rc;
 }
 
+static rt_err_t bleuart_rx_ind(rt_device_t dev, rt_size_t size)
+{
+    uint8_t ch;
+    int i;
+
+    for(i = 0; i < size; i++)
+    {
+        /* read a char */
+        if (rt_device_read(dev, 0, &ch, 1))
+        {
+            rt_ringbuffer_put_force(bleuart.rx_fifo, &ch, 1);
+            rt_sem_release(bleuart.rx_end);
+        }
+    }
+
+    return RT_EOK;
+}
+
+static uint8_t bleuart_read(void)
+{
+    uint8_t ch;
+
+    rt_sem_take(bleuart.rx_end, RT_WAITING_FOREVER);
+    rt_ringbuffer_getchar(bleuart.rx_fifo, &ch);
+
+    return ch;
+}
+
 /**
  * Reads console and sends data over BLE
  */
-static void
-bleuart_uart_read(void)
+static void bleuart_uart_proc(void)
 {
-    int rc;
-    int off;
-    int full_line;
+    int off = 0;
+    char ch;
     struct os_mbuf *om;
 
-    off = 0;
-    while (1) {
-        rc = console_read(console_buf + off,
-                          MYNEWT_VAL(BLEUART_MAX_INPUT) - off, &full_line);
-        if (rc <= 0 && !full_line) {
-            continue;
-        }
-        off += rc;
-        if (!full_line) {
-            continue;
-        }
+    rt_kprintf("======== Welcome to enter bluetooth uart mode ========\n");
+    rt_kprintf("Press 'ESC' to exit.\n");
 
+    /* process user input */
+    while (ESC_KEY != (ch = bleuart_read()))
+    {
+        if(ch != '\r' && ch != '\n')
+        {
+            if(ch == BACKSPACE_KEY || ch == DELECT_KEY)
+            {
+                if(off)
+                {
+                    console_buf[off--] = 0;
+                    rt_kprintf("\b \b");
+                }
+            }
+            else
+            {
+                console_buf[off++] = ch;
+                rt_kprintf("%c", ch);
+                continue;
+            }
+        }    
+
+        console_buf[off] = '\0';
+        rt_kprintf("\n");
         om = ble_hs_mbuf_from_flat(console_buf, off);
         if (!om) {
             return;
@@ -168,8 +229,9 @@ bleuart_uart_read(void)
         ble_gattc_notify_custom(g_console_conn_handle,
                                 g_bleuart_attr_read_handle, om);
         off = 0;
-        break;
     }
+
+    bleuart_deinit();
 }
 
 /**
@@ -182,22 +244,109 @@ bleuart_set_conn_handle(uint16_t conn_handle) {
     g_console_conn_handle = conn_handle;
 }
 
+static void bleuart_deinit(void)
+{
+    rt_base_t level;
+    rt_device_t uart_console;
+
+    level = rt_hw_interrupt_disable();
+    uart_console = rt_console_get_device();
+    if(uart_console)
+    {
+        rt_device_set_rx_indicate(uart_console, bleuart.old_rx_ind);
+    }
+    rt_hw_interrupt_enable(level);
+
+    if (console_buf != RT_NULL)
+    {
+        rt_free(console_buf);
+        console_buf = RT_NULL;
+    }
+
+    if (bleuart.rx_end != RT_NULL)
+    {
+        rt_sem_delete(bleuart.rx_end);
+        bleuart.rx_end = RT_NULL;
+    }
+
+    if (bleuart.rx_fifo != RT_NULL)
+    {
+        rt_ringbuffer_destroy(bleuart.rx_fifo);
+        bleuart.rx_fifo = RT_NULL;
+    }
+}
+
 /**
  * BLEuart console initialization
  *
  * @param Maximum input
  */
-void
-bleuart_init(void)
+int bleuart_init(void)
 {
     int rc;
+    rt_base_t level;
+    rt_device_t uart_console;
 
     /* Ensure this function only gets called by sysinit. */
     SYSINIT_ASSERT_ACTIVE();
 
-    rc = console_init(bleuart_uart_read);
-    SYSINIT_PANIC_ASSERT(rc == 0);
+    /* create buffer for send */
+    console_buf = rt_malloc(MYNEWT_VAL(BLEUART_MAX_INPUT));
+    if (console_buf == RT_NULL)
+    {
+        rc = -RT_ENOMEM;
+        goto __exit;
+    }
 
-    console_buf = malloc(MYNEWT_VAL(BLEUART_MAX_INPUT));
-    SYSINIT_PANIC_ASSERT(console_buf != NULL);
+    /* create semaphore for the end of char recived */
+    bleuart.rx_end = rt_sem_create("bleuart", 0, RT_IPC_FLAG_FIFO);
+    if (bleuart.rx_end == RT_NULL)
+    {
+        rc = -RT_ENOMEM;
+        goto __exit;
+    }
+
+    /* create recived fifo */
+    bleuart.rx_fifo = rt_ringbuffer_create(MYNEWT_VAL(BLEUART_MAX_INPUT));
+    if (bleuart.rx_fifo == RT_NULL)
+    {
+        rc = -RT_ENOMEM;
+        goto __exit;
+    }
+
+    level = rt_hw_interrupt_disable();
+    uart_console = rt_console_get_device();
+    if(uart_console)
+    {
+        /* back uart console old indicate callback */
+        bleuart.old_rx_ind = uart_console->rx_indicate;
+        rt_device_set_rx_indicate(uart_console, bleuart_rx_ind);
+    }
+    rt_hw_interrupt_enable(level);
+
+    /* Reads console and sends data over BLE */
+    bleuart_uart_proc();
+
+    return RT_EOK;
+
+__exit:
+    if (console_buf != RT_NULL)
+    {
+        rt_free(console_buf);
+        console_buf = RT_NULL;
+    }
+
+    if (bleuart.rx_end != RT_NULL)
+    {
+        rt_sem_delete(bleuart.rx_end);
+        bleuart.rx_end = RT_NULL;
+    }
+
+    if (bleuart.rx_fifo != RT_NULL)
+    {
+        rt_ringbuffer_destroy(bleuart.rx_fifo);
+        bleuart.rx_fifo = RT_NULL;
+    }
+
+    return rc;
 }

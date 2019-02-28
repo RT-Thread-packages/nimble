@@ -31,6 +31,7 @@ src += Split('''
     nimble/host/src/ble_gap.c
     nimble/host/src/ble_gattc.c
     nimble/host/src/ble_gatts.c
+    nimble/host/src/ble_gatts_lcl.c
     nimble/host/src/ble_hs_adv.c
     nimble/host/src/ble_hs_atomic.c
     nimble/host/src/ble_hs.c
@@ -66,6 +67,7 @@ src += Split('''
     nimble/host/src/ble_uuid.c
     nimble/host/services/ans/src/ble_svc_ans.c
     nimble/host/services/bas/src/ble_svc_bas.c
+    nimble/host/services/bleuart/src/ble_svc_uart.c
     nimble/host/services/gap/src/ble_svc_gap.c
     nimble/host/services/gatt/src/ble_svc_gatt.c
     nimble/host/services/ias/src/ble_svc_ias.c
@@ -90,6 +92,7 @@ src += Split('''
     porting/npl/rtthread/src/modlog.c
     porting/npl/rtthread/src/nimble_port_rtthread.c
     porting/npl/rtthread/src/npl_os_rtthread.c
+    porting/npl/rtthread/src/npl_shell.c
     ''')
 
 if GetDepend(['NIMBLE_BSP_NRF52']):
@@ -143,6 +146,26 @@ if GetDepend(['NIMBLE_CTLR']):
         porting/nimble/src/hal_timer.c
         """)
 
+# central sample
+if GetDepend(['NIMBLE_SAMPLE_CENTRAL']):
+    path += [cwd + '/apps/blecent/src']
+    
+    src += Split("""
+        apps/blecent/src/blecent.c
+        apps/blecent/src/misc.c
+        apps/blecent/src/peer.c
+        """)
+
+# blecsc sensor
+if GetDepend(['NIMBLE_SAMPLE_BLECSC']):
+    path += [cwd + '/apps/blecsc/src']
+
+    src += Split("""
+        apps/blecsc/src/blecsc_sens.c
+        apps/blecsc/src/gatt_svr.c
+        """)
+
+
 # peripheral heart-rate sample
 if GetDepend(['NIMBLE_SAMPLE_PER_HR']):
     path += [cwd + '/apps/blehr/src']
@@ -150,6 +173,55 @@ if GetDepend(['NIMBLE_SAMPLE_PER_HR']):
     src += Split("""
         apps/blehr/src/blehr.c
         apps/blehr/src/gatt_svr.c
+        """)
+
+# bleprph sample
+if GetDepend(['NIMBLE_SAMPLE_PERIPHERAL']):
+    path += [cwd + '/apps/bleprph/src']
+    
+    src += Split("""
+        apps/bleprph/src/bleprph.c
+        apps/bleprph/src/gatt_svr.c
+        apps/bleprph/src/misc.c
+        """)
+
+# bletest
+if GetDepend(['NIMBLE_SAMPLE_BLETEST']):
+    path += [cwd + '/apps/bletest/src']
+
+    src += Split("""
+        apps/bletest/src/bletest_hci.c
+        apps/bletest/src/bletest.c
+        """)
+
+# bleuart
+if GetDepend(['NIMBLE_SAMPLE_BLEUART']):
+    path += [cwd + '/apps/bleuart/src']
+
+    src += Split("""
+        apps/bleuart/src/bleuart.c
+        """)
+
+# btshell
+if GetDepend(['NIMBLE_SAMPLE_BTSHELL']):
+    path += [cwd + '/apps/btshell/src']
+
+    src += Split("""
+        apps/btshell/src/btshell.c
+        apps/btshell/src/cmd_gatt.c
+        apps/btshell/src/cmd_l2cap.c
+        apps/btshell/src/cmd.c
+        apps/btshell/src/gatt_svr.c
+        apps/btshell/src/misc.c
+        apps/btshell/src/parse.c
+        """)
+
+# ble external advertiser sample
+if GetDepend(['NIMBLE_SAMPLE_EXT_ADVERTISER']):
+    path += [cwd + '/apps/ext_advertiser/src']
+
+    src += Split("""
+        apps/ext_advertiser/src/ext_advertiser.c
         """)
 
 # beacon sample

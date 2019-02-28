@@ -21,7 +21,6 @@
 #define H_BTSHELL_PRIV_
 
 #include <inttypes.h>
-#include "os/mynewt.h"
 #include "nimble/ble.h"
 #include "nimble/nimble_opt.h"
 #include "modlog/modlog.h"

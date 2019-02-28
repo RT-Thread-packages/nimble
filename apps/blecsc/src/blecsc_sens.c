@@ -22,8 +22,8 @@
 #include <stdio.h>
 #include <errno.h>
 
-#include "os/mynewt.h"
-#include "console/console.h"
+#include <rtthread.h>
+
 #include "config/config.h"
 #include "nimble/ble.h"
 #include "host/ble_hs.h"
@@ -53,7 +53,7 @@ static uint8_t blecsc_addr_type;
 static const char *device_name = "blecsc_sensor";
 
 /* Measurement and notification timer */
-static struct os_callout blecsc_measure_timer;
+static struct ble_npl_callout blecsc_measure_timer;
 
 /* Variable holds current CSC measurement state */
 static struct ble_csc_measurement_state csc_measurement_state;
@@ -183,11 +183,11 @@ blecsc_simulate_speed_and_cadence()
 
 /* Run CSC measurement simulation and notify it to the client */
 static void
-blecsc_measurement(struct os_event *ev)
+blecsc_measurement(struct ble_npl_event *ev)
 {
     int rc;
 
-    rc = os_callout_reset(&blecsc_measure_timer, OS_TICKS_PER_SEC);
+    rc = ble_npl_callout_reset(&blecsc_measure_timer, RT_TICK_PER_SECOND);
     assert(rc == 0);
 
     blecsc_simulate_speed_and_cadence();
@@ -269,6 +269,7 @@ blecsc_on_sync(void)
     blecsc_advertise();
 }
 
+extern struct ble_npl_eventq *nimble_port_get_dflt_eventq(void);
 /*
  * main
  *
@@ -277,21 +278,18 @@ blecsc_on_sync(void)
  *
  * @return int NOTE: this function should never return!
  */
-int
-main(void)
+int blecsc_sens_entry(void)
 {
     int rc;
 
-    /* Initialize OS */
-    sysinit();
 
     /* Initialize the NimBLE host configuration */
     ble_hs_cfg.sync_cb = blecsc_on_sync;
 
     /* Initialize measurement and notification timer */
-    os_callout_init(&blecsc_measure_timer, os_eventq_dflt_get(),
+    ble_npl_callout_init(&blecsc_measure_timer, nimble_port_get_dflt_eventq(),
                     blecsc_measurement, NULL);
-    rc = os_callout_reset(&blecsc_measure_timer, OS_TICKS_PER_SEC);
+    rc = ble_npl_callout_reset(&blecsc_measure_timer, RT_TICK_PER_SECOND);
     assert(rc == 0);
 
     rc = gatt_svr_init(&csc_measurement_state);
@@ -301,10 +299,10 @@ main(void)
     rc = ble_svc_gap_device_name_set(device_name);
     assert(rc == 0);
 
-    /* As the last thing, process events from default event queue */
-    while (1) {
-        os_eventq_run(os_eventq_dflt_get());
-    }
+    /* startup bluetooth host stack*/
+    ble_hs_thread_startup();
+
     return 0;
 }
 
+MSH_CMD_EXPORT_ALIAS(blecsc_sens_entry, blecsc_sens, "bluetooth cycle sensor sample");

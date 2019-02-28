@@ -23,12 +23,13 @@
 #include <stdarg.h>
 #include <errno.h>
 #include <assert.h>
-#include "console/console.h"
 #include "host/ble_hs.h"
 #include "host/ble_uuid.h"
 #include "host/ble_eddystone.h"
 #include "cmd.h"
 #include "btshell.h"
+
+#include "nimble/npl_shell.h"
 
 #define CMD_MAX_ARGS        16
 

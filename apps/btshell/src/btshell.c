@@ -21,13 +21,8 @@
 #include <string.h>
 #include <stdio.h>
 #include <errno.h>
-#include "os/mynewt.h"
-#include "bsp/bsp.h"
 #include "log/log.h"
 #include "stats/stats.h"
-#include "bsp/bsp.h"
-#include "hal/hal_gpio.h"
-#include "console/console.h"
 #include "btshell.h"
 #include "cmd.h"
 
@@ -54,6 +49,8 @@
 #include "../src/ble_hs_conn_priv.h"
 #include "../src/ble_hs_atomic_priv.h"
 #include "../src/ble_hs_hci_priv.h"
+
+#include "nimble/npl_shell.h"
 
 #if MYNEWT_VAL(BLE_ROLE_CENTRAL)
 #define BTSHELL_MAX_SVCS               32
@@ -106,7 +103,7 @@ struct os_mbuf_pool sdu_os_mbuf_pool;
 static struct os_mempool sdu_coc_mbuf_mempool;
 #endif
 
-static struct os_callout btshell_tx_timer;
+static struct ble_npl_callout btshell_tx_timer;
 struct btshell_tx_data_s
 {
     uint16_t tx_num;
@@ -1227,7 +1224,7 @@ btshell_on_l2cap_update(uint16_t conn_handle, int status, void *arg)
 }
 
 static void
-btshell_tx_timer_cb(struct os_event *ev)
+btshell_tx_timer_cb(struct ble_npl_event *ev)
 {
     int i;
     uint8_t len;
@@ -1279,7 +1276,7 @@ btshell_tx_timer_cb(struct os_event *ev)
     if (btshell_tx_data.tx_num) {
         timeout = (int32_t)btshell_tx_data.tx_rate;
         timeout = (timeout * OS_TICKS_PER_SEC) / 1000;
-        os_callout_reset(&btshell_tx_timer, timeout);
+        ble_npl_callout_reset(&btshell_tx_timer, timeout);
     }
 }
 
@@ -1838,7 +1835,7 @@ btshell_tx_start(uint16_t handle, uint16_t len, uint16_t rate, uint16_t num)
     btshell_tx_data.tx_len = len;
     btshell_tx_data.tx_handle = handle;
 
-    os_callout_reset(&btshell_tx_timer, 0);
+    ble_npl_callout_reset(&btshell_tx_timer, 0);
 
     return 0;
 }
@@ -2164,6 +2161,8 @@ btshell_init_ext_adv_restart(void)
 #endif
 }
 
+extern int nimble_ble_enable(void);
+extern struct ble_npl_eventq *nimble_port_get_dflt_eventq(void);
 /**
  * main
  *
@@ -2172,17 +2171,9 @@ btshell_init_ext_adv_restart(void)
  *
  * @return int NOTE: this function should never return!
  */
-int
-main(int argc, char **argv)
+int btshell_init(void)
 {
     int rc;
-
-#ifdef ARCH_sim
-    mcu_sim_parse_args(argc, argv);
-#endif
-
-    /* Initialize OS */
-    sysinit();
 
     /* Initialize some application specific memory pools. */
     rc = os_mempool_init(&btshell_svc_pool, BTSHELL_MAX_SVCS,
@@ -2236,16 +2227,190 @@ main(int argc, char **argv)
     /* Create a callout (timer).  This callout is used by the "tx" btshell
      * command to repeatedly send packets of sequential data bytes.
      */
-    os_callout_init(&btshell_tx_timer, os_eventq_dflt_get(),
+    ble_npl_callout_init(&btshell_tx_timer, nimble_port_get_dflt_eventq(),
                     btshell_tx_timer_cb, NULL);
 
     btshell_init_ext_adv_restart();
 
-    while (1) {
-        os_eventq_run(os_eventq_dflt_get());
-    }
-    /* os start should never return. If it does, this should be an error */
-    assert(0);
+    /* startup bluetooth host stack*/
+    ble_hs_thread_startup();
 
     return 0;
 }
+
+/**
+ * Bluetooth shell porting on RT-Thread
+ */ 
+#include <rtthread.h>
+#include <rtdevice.h>
+#include <rthw.h>
+
+#define BTSHELL_RX_FIFO_SIZE 256
+
+#define ESC_KEY                 0x1B
+#define BACKSPACE_KEY           0x08
+#define DELECT_KEY              0x7F
+
+struct shell_console
+{
+    struct rt_semaphore *rx_end;
+    struct rt_ringbuffer *rx_fifo;
+    rt_err_t (*old_rx_ind)(rt_device_t dev, rt_size_t size);
+};
+
+static struct shell_console btshell_console;
+
+static rt_err_t uart_console_rx_ind(rt_device_t dev, rt_size_t size)
+{
+    uint8_t ch;
+    rt_size_t i;
+
+    for (i = 0; i < size; i++)
+    {
+        /* read a char */
+        if (rt_device_read(dev, 0, &ch, 1))
+        {
+            rt_ringbuffer_put_force(btshell_console.rx_fifo, &ch, 1);
+            rt_sem_release(btshell_console.rx_end);
+        }
+    }
+
+    return RT_EOK;
+}
+
+static int rt_btshell_init(void)
+{
+    rt_base_t level;
+    rt_device_t uart_console;
+
+    /* create semaphore for the end of char recived */
+    btshell_console.rx_end = rt_sem_create("btshell", 0, RT_IPC_FLAG_FIFO);
+    if (btshell_console.rx_end == RT_NULL)
+    {
+        goto __exit;
+    }
+
+    /* create recived fifo */
+    btshell_console.rx_fifo = rt_ringbuffer_create(BTSHELL_RX_FIFO_SIZE);
+    if (btshell_console.rx_fifo == RT_NULL)
+    {
+        goto __exit;
+    }
+
+    level = rt_hw_interrupt_disable();
+    uart_console = rt_console_get_device();
+    if(uart_console)
+    {
+        /* back uart console old indicate callback */
+        btshell_console.old_rx_ind = uart_console->rx_indicate;
+        rt_device_set_rx_indicate(uart_console, uart_console_rx_ind);
+    }
+    rt_hw_interrupt_enable(level);
+
+    return RT_EOK;
+
+__exit:
+    if (btshell_console.rx_end != RT_NULL)
+    {
+        rt_sem_delete(btshell_console.rx_end);
+        btshell_console.rx_end = RT_NULL;
+    }
+
+    if (btshell_console.rx_fifo != RT_NULL)
+    {
+        rt_ringbuffer_destroy(btshell_console.rx_fifo);
+        btshell_console.rx_fifo = RT_NULL;
+    }
+
+    return -RT_ERROR;
+}
+
+static void rt_btshell_deinit(void)
+{
+    rt_base_t level;
+    rt_device_t uart_console;
+
+    level = rt_hw_interrupt_disable();
+    uart_console = rt_console_get_device();
+    if(uart_console)
+    {
+        rt_device_set_rx_indicate(uart_console, btshell_console.old_rx_ind);
+    }
+    rt_hw_interrupt_enable(level);
+
+    if (btshell_console.rx_end != RT_NULL)
+    {
+        rt_sem_delete(btshell_console.rx_end);
+        btshell_console.rx_end = RT_NULL;
+    }
+
+    if (btshell_console.rx_fifo != RT_NULL)
+    {
+        rt_ringbuffer_destroy(btshell_console.rx_fifo);
+        btshell_console.rx_fifo = RT_NULL;
+    }
+}
+
+static char uart_console_getchar(void)
+{
+    char ch;
+
+    rt_sem_take(btshell_console.rx_end, RT_WAITING_FOREVER);
+    rt_ringbuffer_getchar(btshell_console.rx_fifo, (rt_uint8_t *)&ch);
+
+    return ch;
+}
+
+static void rt_btshell_parser(void)
+{
+    char ch;
+    char cur_line[FINSH_CMD_SIZE] = { 0 };
+    rt_size_t cur_line_len = 0;
+
+    rt_kprintf("======== Welcome to enter bluetooth shell mode ========\n");
+    rt_kprintf("Press 'ESC' to exit.\n");
+    /* process user input */
+    while (ESC_KEY != (ch = uart_console_getchar()))
+    {
+        if (ch == BACKSPACE_KEY || ch == DELECT_KEY)
+        {
+            if (cur_line_len)
+            {
+                cur_line[--cur_line_len] = 0;
+                rt_kprintf("\b \b");
+            }
+            continue;
+        }
+        else if (ch == '\r' || ch == '\n')
+        {
+            cur_line[cur_line_len++] = '\0';
+            rt_kprintf("\n");
+            shell_process_command(cur_line);
+            cur_line_len = 0;
+        }
+        else
+        {
+            rt_kprintf("%c", ch);
+            cur_line[cur_line_len++] = ch;
+        }
+    }
+    rt_kprintf("\n");
+}
+
+static int btshell_entry(int argc, char *argv[])
+{
+    static int btshell_init_flag = 0;
+
+    if (btshell_init_flag == 0)
+    {
+        btshell_init();
+        btshell_init_flag = 1;
+    }
+    rt_btshell_init();
+    rt_btshell_parser();
+    rt_btshell_deinit();
+
+    return 0;
+}
+
+MSH_CMD_EXPORT_ALIAS(btshell_entry, btshell, "bluetooth shell mode");

@@ -20,14 +20,14 @@
 #include <inttypes.h>
 #include <errno.h>
 
-#include "bsp/bsp.h"
 #include "host/ble_hs_mbuf.h"
 #include "host/ble_gap.h"
 #include "services/gatt/ble_svc_gatt.h"
-#include "console/console.h"
 #include "btshell.h"
 #include "cmd.h"
 #include "cmd_gatt.h"
+
+#include "nimble/npl_shell.h"
 
 #define CMD_BUF_SZ      256
 static bssnz_t uint8_t cmd_buf[CMD_BUF_SZ];

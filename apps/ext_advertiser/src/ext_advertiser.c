@@ -22,8 +22,7 @@
 #include <stdio.h>
 #include <errno.h>
 
-#include "os/mynewt.h"
-#include "console/console.h"
+#include "nimble/npl_shell.h"
 #include "config/config.h"
 #include "nimble/ble.h"
 #include "host/ble_hs.h"
@@ -445,20 +444,16 @@ on_sync(void)
  *
  * @return int NOTE: this function should never return!
  */
-int
-main(void)
+int ext_advertiser_entry(void)
 {
-    /* Initialize OS */
-    sysinit();
-
     console_printf("Extended Advertising sample application\n");
 
     /* Set sync callback */
     ble_hs_cfg.sync_cb = on_sync;
 
-    /* As the last thing, process events from default event queue */
-    while (1) {
-        os_eventq_run(os_eventq_dflt_get());
-    }
+    /* startup bluetooth host stack*/
+    ble_hs_thread_startup();
+
     return 0;
 }
+MSH_CMD_EXPORT_ALIAS(ext_advertiser_entry, ext_advertiser, "bluetooth external advertiser sample");

@@ -19,12 +19,12 @@
 
 #include <assert.h>
 #include <string.h>
-#include "bsp/bsp.h"
-#include "console/console.h"
 #include "host/ble_hs.h"
 #include "host/ble_uuid.h"
 #include "host/ble_gatt.h"
 #include "btshell.h"
+
+#include "nimble/npl_shell.h"
 
 /* 0000xxxx-8c26-476f-89a7-a108033a69c7 */
 #define PTS_UUID_DECLARE(uuid16)                                \
