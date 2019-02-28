@@ -59,14 +59,14 @@ RT-Thread online packages
                 Version (latest)  --->
 ```
 
-**Peripheral Role support**  ：  配置作为 Peripheral 设备；
-**Central Role support  **  ：  配置作为 Central 设备；
-**Observer**  ：  配置作为 Observer 设备；
-**Host stack configuration**  ：  配置 Host Stack；
-**Controller configuretion**  ：  配置 Controller；
-**Log level (INFO)**  ：  配置协议栈日志等级；
-**Samples**  ：  配置示例应用；
-**Version**  ：  配置作为 Peripheral 设备；
+**Peripheral Role support**  ：  配置作为 Peripheral 设备；  
+**Central Role support  **  ：  配置作为 Central 设备；  
+**Observer**  ：  配置作为 Observer 设备；  
+**Host stack configuration**  ：  配置 Host Stack；  
+**Controller configuretion**  ：  配置 Controller；  
+**Log level (INFO)**  ：  配置协议栈日志等级；  
+**Samples**  ：  配置示例应用；  
+**Version**  ：  配置作为 Peripheral 设备；  
 
 配置完成后让 RT-Thread 的包管理器自动更新，或者使用 pkgs --update 命令更新包到 BSP 中。
 
