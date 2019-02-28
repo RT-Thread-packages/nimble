@@ -51,8 +51,6 @@ static void ble_app_on_sync(void)
     ble_app_advertise();
 }
 
-extern int nimble_ble_enable(void);
-
 static int ble_ibeacon(void)
 {
     static int init_flag = 0;
@@ -63,9 +61,9 @@ static int ble_ibeacon(void)
 
     ble_hs_cfg.sync_cb = ble_app_on_sync;
 
-    /* Enable bluetooth stack */
-    nimble_ble_enable();
+    /* startup bluetooth host stack*/
+    ble_hs_thread_startup();
 
     return 0;
 }
-MSH_CMD_EXPORT_ALIAS(ble_ibeacon, ble_ibeacon, "bluetoooth ibeacon");
+MSH_CMD_EXPORT_ALIAS(ble_ibeacon, ble_ibeacon, "bluetoooth ibeacon sample");

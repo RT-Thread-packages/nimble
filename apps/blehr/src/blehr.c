@@ -31,7 +31,7 @@
 static bool notify_state;
 static uint16_t notify_conn_handle;
 
-static const char *device_name = "rtt_blehr_sensor";
+static const char *device_name = "blehr_sensor";
 
 static int blehr_gap_event(struct ble_gap_event *event, void *arg);
 
@@ -238,8 +238,9 @@ static int ble_hr(void)
     rc = ble_svc_gap_device_name_set(device_name);
     RT_ASSERT(rc == 0);
 
-    nimble_ble_enable();
+    /* startup bluetooth host stack*/
+    ble_hs_thread_startup();
     
     return 0;
 }
-MSH_CMD_EXPORT_ALIAS(ble_hr, ble_hr, "bluetoooth peripheral heartrate");
+MSH_CMD_EXPORT_ALIAS(ble_hr, ble_hr, "bluetoooth heartrate senson sample");

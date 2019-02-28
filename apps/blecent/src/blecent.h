@@ -20,7 +20,7 @@
 #ifndef H_BLECENT_
 #define H_BLECENT_
 
-#include "os/mynewt.h"
+#include "nimble/ble.h"
 #include "modlog/modlog.h"
 #ifdef __cplusplus
 extern "C" {

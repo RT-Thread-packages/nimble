@@ -21,13 +21,8 @@
 #include <string.h>
 #include <stdio.h>
 #include <errno.h>
-#include "os/mynewt.h"
-#include "bsp/bsp.h"
-#include "hal/hal_gpio.h"
-#include "console/console.h"
-#include "hal/hal_system.h"
-#include "config/config.h"
-#include "split/split.h"
+
+#include <rtthread.h>
 
 /* BLE */
 #include "nimble/ble.h"
@@ -297,13 +292,9 @@ bleprph_on_sync(void)
  *
  * @return int NOTE: this function should never return!
  */
-int
-main(void)
+int bleprph_entry(void)
 {
     int rc;
-
-    /* Initialize OS */
-    sysinit();
 
     /* Initialize the NimBLE host configuration. */
     ble_hs_cfg.reset_cb = bleprph_on_reset;
@@ -322,26 +313,8 @@ main(void)
     phy_init();
 #endif
 
-    conf_load();
-
-    /* If this app is acting as the loader in a split image setup, jump into
-     * the second stage application instead of starting the OS.
-     */
-#if MYNEWT_VAL(SPLIT_LOADER)
-    {
-        void *entry;
-        rc = split_app_go(&entry, true);
-        if (rc == 0) {
-            hal_system_start(entry);
-        }
-    }
-#endif
-
-    /*
-     * As the last thing, process events from default event queue.
-     */
-    while (1) {
-        os_eventq_run(os_eventq_dflt_get());
-    }
-    return 0;
+    /* startup bluetooth host stack*/
+    ble_hs_thread_startup();
 }
+
+MSH_CMD_EXPORT_ALIAS(bleprph_entry, bleprph, "bluetooth peripheral role sample");

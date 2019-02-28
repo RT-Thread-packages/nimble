@@ -19,17 +19,16 @@
 
 #include <assert.h>
 #include <string.h>
-#include "os/mynewt.h"
-#include "bsp/bsp.h"
+
+#include <rtthread.h>
 
 /* BLE */
 #include "nimble/ble.h"
-#include "controller/ble_ll.h"
 #include "host/ble_hs.h"
 #include "host/util/util.h"
 
-/* RAM HCI transport. */
-#include "transport/ram/ble_hci_ram.h"
+/* HCI transport. */
+#include "nimble/ble_hci_trans.h"
 
 /* Mandatory services. */
 #include "services/gap/ble_svc_gap.h"
@@ -204,7 +203,7 @@ blecent_on_disc_complete(const struct peer *peer, int status, void *arg)
      * list of services, characteristics, and descriptors that the peer
      * supports.
      */
-    MODLOG_DFLT(ERROR, "Service discovery complete; status=%d "
+    MODLOG_DFLT(INFO, "Service discovery complete; status=%d "
                        "conn_handle=%d\n", status, peer->conn_handle);
 
     /* Now perform three concurrent GATT procedures against the peer: read,
@@ -484,6 +483,7 @@ blecent_on_sync(void)
     blecent_scan();
 }
 
+extern int nimble_ble_enable(void);
 /**
  * main
  *
@@ -491,13 +491,9 @@ blecent_on_sync(void)
  *
  * @return int NOTE: this function should never return!
  */
-int
-main(void)
+int blecent_entry(void)
 {
     int rc;
-
-    /* Initialize OS */
-    sysinit();
 
     /* Configure the host. */
     ble_hs_cfg.reset_cb = blecent_on_reset;
@@ -512,10 +508,10 @@ main(void)
     rc = ble_svc_gap_device_name_set("nimble-blecent");
     assert(rc == 0);
 
-    /* os start should never return. If it does, this should be an error */
-    while (1) {
-        os_eventq_run(os_eventq_dflt_get());
-    }
+    /* startup bluetooth host stack*/
+    ble_hs_thread_startup();
 
     return 0;
 }
+
+MSH_CMD_EXPORT_ALIAS(blecent_entry, blecent, "bluetooth centrol role sample");

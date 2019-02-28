@@ -21,8 +21,6 @@
 #include <inttypes.h>
 #include <errno.h>
 #include <string.h>
-#include "os/mynewt.h"
-#include "bsp/bsp.h"
 
 #include "nimble/ble.h"
 #include "nimble/nimble_opt.h"
@@ -35,13 +33,12 @@
 #include "services/gatt/ble_svc_gatt.h"
 #include "../src/ble_hs_priv.h"
 
-#include "console/console.h"
-#include "shell/shell.h"
-
 #include "cmd.h"
 #include "btshell.h"
 #include "cmd_gatt.h"
 #include "cmd_l2cap.h"
+
+#include "nimble/npl_shell.h"
 
 #define BTSHELL_MODULE "btshell"
 
@@ -3153,6 +3150,7 @@ static const struct shell_cmd_help phy_read_help = {
     .usage = NULL,
     .params = phy_read_params,
 };
+#endif
 
 /*****************************************************************************
  * $host-enable                                                              *
@@ -3411,7 +3409,6 @@ static const struct shell_cmd_help gatt_write_help = {
     .usage = NULL,
     .params = gatt_write_params,
 };
-#endif
 
 #if MYNEWT_VAL(BLE_L2CAP_COC_MAX_NUM)
 #if MYNEWT_VAL(SHELL_CMD_HELP)

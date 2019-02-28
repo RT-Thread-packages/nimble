@@ -165,6 +165,8 @@ uint32_t ble_npl_hw_enter_critical(void);
 
 void ble_npl_hw_exit_critical(uint32_t ctx);
 
+void ble_hs_thread_startup(void);
+
 #ifdef __cplusplus
 }
 #endif
