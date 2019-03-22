@@ -12,6 +12,9 @@
 #include <stdint.h>
 #include <string.h>
 
+/* errno definitions for RT-Thread libc*/
+#include "libc/libc_errno.h"
+
 // TODO: _Static_assert support
 #ifndef _Static_assert
 #define _Static_assert(...)
@@ -19,10 +22,15 @@
 
 #define BLE_NPL_OS_ALIGNMENT    4
 
-#define BLE_NPL_TIME_FOREVER    -1
+#define BLE_NPL_TIME_FOREVER    (0xFFFFFFFF)
 
-typedef int32_t ble_npl_time_t;
+typedef uint32_t ble_npl_time_t;
 typedef int32_t ble_npl_stime_t;
+
+struct ble_npl_task
+{
+    void *t;
+};
 
 struct ble_npl_event
 {

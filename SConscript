@@ -22,6 +22,7 @@ path += [
     cwd + '/porting/nimble/include',
     cwd + '/porting/npl/rtthread/include']
 
+# Host stack
 src += Split('''
     nimble/host/src/ble_att.c
     nimble/host/src/ble_att_clt.c
@@ -95,9 +96,6 @@ src += Split('''
     porting/npl/rtthread/src/npl_shell.c
     ''')
 
-if GetDepend(['NIMBLE_BSP_NRF52']):
-    src += Glob('porting/npl/rtthread/src/nrf5x_isr.c')
-
 # tinycrypt
 path += [cwd + '/ext/tinycrypt/include']
 
@@ -111,12 +109,12 @@ src += Split('''
     ''')
 
 # controller
-if GetDepend(['NIMBLE_CTLR']):
+if GetDepend(['PKG_NIMBLE_CTLR']):
     CPPDEFINES = ['NIMBLE_CFG_CONTROLLER=1']
 else:
     CPPDEFINES = ['']
 
-if GetDepend(['NIMBLE_CTLR']):
+if GetDepend(['PKG_NIMBLE_CTLR']):
     path += [
         cwd + '/nimble/transport/ram/include',
         cwd + '/nimble/controller/include',
@@ -144,10 +142,11 @@ if GetDepend(['NIMBLE_CTLR']):
         porting/nimble/src/os_cputime.c
         porting/nimble/src/os_cputime_pwr2.c
         porting/nimble/src/hal_timer.c
+        porting/npl/rtthread/src/nrf5x_isr.c
         """)
 
 # central sample
-if GetDepend(['NIMBLE_SAMPLE_CENTRAL']):
+if GetDepend(['PKG_NIMBLE_SAMPLE_CENTRAL']):
     path += [cwd + '/apps/blecent/src']
     
     src += Split("""
@@ -157,7 +156,7 @@ if GetDepend(['NIMBLE_SAMPLE_CENTRAL']):
         """)
 
 # blecsc sensor
-if GetDepend(['NIMBLE_SAMPLE_BLECSC']):
+if GetDepend(['PKG_NIMBLE_SAMPLE_BLECSC']):
     path += [cwd + '/apps/blecsc/src']
 
     src += Split("""
@@ -167,7 +166,7 @@ if GetDepend(['NIMBLE_SAMPLE_BLECSC']):
 
 
 # peripheral heart-rate sample
-if GetDepend(['NIMBLE_SAMPLE_PER_HR']):
+if GetDepend(['PKG_NIMBLE_SAMPLE_PER_HR']):
     path += [cwd + '/apps/blehr/src']
     
     src += Split("""
@@ -176,7 +175,7 @@ if GetDepend(['NIMBLE_SAMPLE_PER_HR']):
         """)
 
 # bleprph sample
-if GetDepend(['NIMBLE_SAMPLE_PERIPHERAL']):
+if GetDepend(['PKG_NIMBLE_SAMPLE_PERIPHERAL']):
     path += [cwd + '/apps/bleprph/src']
     
     src += Split("""
@@ -186,7 +185,7 @@ if GetDepend(['NIMBLE_SAMPLE_PERIPHERAL']):
         """)
 
 # bletest
-if GetDepend(['NIMBLE_SAMPLE_BLETEST']):
+if GetDepend(['PKG_NIMBLE_SAMPLE_BLETEST']):
     path += [cwd + '/apps/bletest/src']
 
     src += Split("""
@@ -195,7 +194,7 @@ if GetDepend(['NIMBLE_SAMPLE_BLETEST']):
         """)
 
 # bleuart
-if GetDepend(['NIMBLE_SAMPLE_BLEUART']):
+if GetDepend(['PKG_NIMBLE_SAMPLE_BLEUART']):
     path += [cwd + '/apps/bleuart/src']
 
     src += Split("""
@@ -203,7 +202,7 @@ if GetDepend(['NIMBLE_SAMPLE_BLEUART']):
         """)
 
 # btshell
-if GetDepend(['NIMBLE_SAMPLE_BTSHELL']):
+if GetDepend(['PKG_NIMBLE_SAMPLE_BTSHELL']):
     path += [cwd + '/apps/btshell/src']
 
     src += Split("""
@@ -217,7 +216,7 @@ if GetDepend(['NIMBLE_SAMPLE_BTSHELL']):
         """)
 
 # ble external advertiser sample
-if GetDepend(['NIMBLE_SAMPLE_EXT_ADVERTISER']):
+if GetDepend(['PKG_NIMBLE_SAMPLE_EXT_ADVERTISER']):
     path += [cwd + '/apps/ext_advertiser/src']
 
     src += Split("""
@@ -225,7 +224,7 @@ if GetDepend(['NIMBLE_SAMPLE_EXT_ADVERTISER']):
         """)
 
 # beacon sample
-if GetDepend(['NIMBLE_SAMPLE_BEACON']):
+if GetDepend(['PKG_NIMBLE_SAMPLE_BEACON']):
     src += Glob('apps/ibeacon/src/ibeacon.c')
 
 LOCAL_CCFLAGS = ''
