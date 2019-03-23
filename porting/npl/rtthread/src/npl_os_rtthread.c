@@ -24,6 +24,22 @@ void *ble_npl_get_current_task_id(void)
     return rt_thread_self();
 }
 
+int ble_npl_task_init(struct ble_npl_task *t, const char *name, 
+        ble_npl_task_fn *func,void *arg, uint8_t prio, 
+        uint32_t sanity_itvl, uint32_t *stack_bottom, uint16_t stack_size)
+{
+    rt_thread_t tid;
+
+    tid = rt_thread_create(name, func, arg, stack_size, prio, 10);
+    if(tid)
+    {
+        t->t = tid;
+        rt_thread_startup(tid);
+        return RT_EOK;
+    }
+    return -RT_ERROR;
+}
+
 void ble_npl_eventq_init(struct ble_npl_eventq *evq)
 {
     evq->q = rt_mq_create("npl_evq", sizeof(struct ble_npl_eventq *), 32, RT_IPC_FLAG_FIFO);

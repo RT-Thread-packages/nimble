@@ -4,39 +4,114 @@ NimBLE 软件包是 RT-Thread 基于 [Apache NimBLE](https://github.com/apache/m
 
 ## 1.1 主要特性
 
-该协议栈的主要特性如下：
+- 扩展广播(LE Advertising Extensions)
+- 2Mbit/s比特率的物理层
+- 长距离编码(Coded PHY for LE Long Range)
+- 高速不可连接广播(High Duty Cycle Non-Connectable Advertising)
+- 新的跳频算法(Channel Selection Algorithm #2)
+- 隐私1.2(LE Privacy 1.2)
+- 安全管理(SM),支持传统配对(LE Legacy Pairing),安全连接(LE Secure Connections),特定秘钥分发(Transport Specific Key Distribution)
+- 链路层PDU数据长度扩展(LE Data Length Extension)
+- 多角色并发(主机(central)/从机(peripheral), server/client)
+- 同时广播和扫描
+- 低速定向广播(Low Duty Cycle Directed Advertising)
+- 连接参数请求(Connection parameters request procedure)
+- LE Ping
+- 完整的GATT客户端，服务端，以及子功能
+- 抽象HCI接口层
 
-- 符合 5.0 核心规范
-   - 1M, 2M 和 Coded PHY
-   - Advertising Extensions
-- 只支持低功耗蓝牙
-- 通用访问配置(GAP)
-   - central, peripheral, observer, broadcaster
-   - privacy
-   - multiple concurrent roles
-- 安全管理(SM)
-    - Legacy Pairing, Secure Connections
-- 通用属性协议(GATT)
-- L2CAP Connection Oriented Channels
-- Bluetooth Mesh
+## 1.2 Profile和Service支持
+
+- 警报通知服务(ANS)
+- 即时报警服务(IAS)
+- 链路丢失服务(LLS)
+- 电池服务(BAS)
+- 设备信息服务(DIS)
+- 心率服务(HRS)
+- 自行车速度及步调(CSC)
+- 射频功率(TPS)
+
+## 1.3 Mesh 特性
+
+- 广播和GATT承载(Advertising and GATT bearers)
+- PB-GATT 和 PB-ADV provisioning
+- 模型层(Foundation Models (server role))
+- 支持中继(Relay support)
+- 支持GATT代理(GATT Proxy)
 
 更多关于 NimBLE Stack 的介绍请参考 ``http://mynewt.apache.org/latest/network/docs/index.html``。
 
-## 1.2 特点与优势
+## 1.4  目录结构
 
-同 nordic 系列常用的 SoftDevice 方案相比，NimBLE 有如下优势和特点：
+```
+NimBLE
+   ├───apps                   /* Bluetooth 示例应用程序 */
+   │   ├───blecent
+   │   ├───blecsc
+   │   ├───blehci
+   │   ├───blehr
+   │   ├───blemesh
+   │   ├───blemesh_light
+   │   ├───blemesh_shell
+   │   ├───bleprph
+   │   ├───bleuart
+   │   ├───btshell
+   │   ├───ext_advertiser
+   │   └───ibeacon
+   ├───docs                   /* 官方文档及 API 说明 */
+   ├───ext
+   │   └───tinycrypt          /* Tinycrypt 加密库 */
+   ├───nimble
+   │   ├───controller         /* Controller 实现 */
+   │   │   ├───include
+   │   │   └───src
+   │   ├───drivers            /* Nordic 系列 Phy 驱动 */
+   │   │   ├───nrf51
+   │   │   └───nrf52
+   │   ├───host               /* Host Stack(主机控制器)实现 */
+   │   │   ├───include
+   │   │   ├───mesh           /* Mesh 组网功能 */
+   │   │   ├───pts            /* PTS 测试相关 */
+   │   │   ├───services       /* 通用的 Profile */
+   │   │   │   ├───ans
+   │   │   │   ├───bas
+   │   │   │   ├───bleuart
+   │   │   │   ├───dis
+   │   │   │   ├───gap
+   │   │   │   ├───gatt
+   │   │   │   ├───ias
+   │   │   │   ├───lls
+   │   │   │   └───tps
+   │   │   ├───src
+   │   │   ├───store
+   │   │   ├───tools
+   │   │   └───util
+   │   ├───include
+   │   │   └───nimble
+   │   ├───src
+   │   └───transport          /* HCI 传输抽象层 */
+   │       ├───emspi
+   │       ├───ram
+   │       ├───socket
+   │       └───uart
+   └───porting                /* OS 抽象层及系统配置 */
+       ├───nimble
+       │   ├───include
+       │   └───src
+       └───npl
+           └───rtthread       /* RT-Thread OS 接口实现 */
+               ├───include
+               │   ├───config /* NimBLE 协议栈配置选项 */
+               │   ├───console
+               │   └───nimble
+               └───src
+```
 
-- SoftDevice 核心软件以二进制形式发布，限制了灵活性或定制可能，NimBLE 则不受此影响
-- 不依赖芯片和MCU架构
-- 代码方便调试，易于修复和增强功能
-- RAM 和 Flash 资源占用少
-- 配置灵活，实现更高的数据吞吐
-
-### 1.3 许可证
+## 1.5 许可证
 
 NimBLE 软件包遵循 Apache-2.0 许可，详见 LICENSE 文件。
 
-### 1.4 依赖
+## 1.6 依赖
 
 - RT_Thread 3.0+
 
@@ -47,26 +122,32 @@ NimBLE 软件包遵循 Apache-2.0 许可，详见 LICENSE 文件。
 ```
 RT-Thread online packages
     IoT - internet of things  --->
-         NimBLE:An open-source Bluetooth 5.0 stack porting on RT-Thread  --->
-          [*]   Peripheral Role support                                   
-          [ ]   Central Role support                                     
-                Observer  --->                                           
-                Common configuration  ----                               
-                Host stack configuration  --->                           
-                Controller configuretion  --->                           
-                Log level (INFO)  --->                                   
-                Samples (peripheral heart-rate)  --->         
-                Version (latest)  --->
+--- NimBLE:An open-source Bluetooth 5.0 stack porting on RT-Thread
+      Bluetooth Role support  --->      
+      Host Stack Configuration  --->
+      Controller Configuration  --->
+      Bluetooth Mesh support  --->
+      HCI Transport support  ----
+      Device Driver support  ----
+      Log level (INFO)  --->
+      Bluetooth Samples (Not enable sample)  --->
+(1)   Maximum number of concurrent connections
+[*]   Device Whitelist Support
+(0)   The number of multi-advertising instances
+[ ]   Extended Advertising Feature Support
+      Version (latest)  --->
+
 ```
 
-**Peripheral Role support**  ：  配置作为 Peripheral 设备；  
-**Central Role support  **  ：  配置作为 Central 设备；  
-**Observer**  ：  配置作为 Observer 设备；  
-**Host stack configuration**  ：  配置 Host Stack；  
-**Controller configuretion**  ：  配置 Controller；  
-**Log level (INFO)**  ：  配置协议栈日志等级；  
-**Samples**  ：  配置示例应用；  
-**Version**  ：  配置作为 Peripheral 设备；  
+**Bluetooth Role support**  ：  配置 BLE角色支持(Central/Peripheral/Broadcaster/Observer) ；   
+**Host Stack Configuration**  ：  配置 Host 相关功能；   
+**Controller Configuration**  ：  配置 Controller 相关功能；   
+**Bluetooth Mesh support**  ：  Mesh 特性支持及配置；   
+**HCI Transport support** ： 配置HCI层传输方式   
+**Device Driver support ** ： 底层 SOC Phy 支持   
+**Log level (INFO)**  ：  配置协议栈日志等级；   
+**Bluetooth Samples**  ：  配置示例应用；   
+**Version**  ：  软件包版本选择；   
 
 配置完成后让 RT-Thread 的包管理器自动更新，或者使用 pkgs --update 命令更新包到 BSP 中。
 
