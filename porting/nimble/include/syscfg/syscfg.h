@@ -25,12 +25,12 @@
 #define MYNEWT_VAL_TINYCRYPT_UECC_RNG_USE_TRNG (0)
 #endif
 
-/*** hw/bsp/nordic_pca10040 */
-#ifndef MYNEWT_VAL_BSP_NRF52
-#define MYNEWT_VAL_BSP_NRF52 (1)
+#ifndef MYNEWT_VAL_BSP_NRF51
+#define MYNEWT_VAL_BSP_NRF51 (0)
 #endif
-#ifndef MYNEWT_VAL_MCU_NRF52832
-#define MYNEWT_VAL_MCU_NRF52832 (1)
+
+#ifndef MYNEWT_VAL_BSP_NRF52
+#define MYNEWT_VAL_BSP_NRF52 (0)
 #endif
 
 #ifndef MYNEWT_VAL_MCU_NRF52840
