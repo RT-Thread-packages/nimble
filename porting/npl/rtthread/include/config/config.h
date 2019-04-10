@@ -94,6 +94,10 @@
 #define MYNEWT_VAL_BLE_CTLR_THREAD_PRIORITY     (PKG_NIMBLE_CTLR_THREAD_PRIORITY)
 #endif
 
+#ifdef PKG_NIMBLE_BSP_NRF51
+#define MYNEWT_VAL_BSP_NRF51                     (1)
+#endif
+
 #ifdef PKG_NIMBLE_BSP_NRF52
 #define MYNEWT_VAL_BSP_NRF52                     (1)
 #endif

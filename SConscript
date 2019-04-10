@@ -117,8 +117,21 @@ else:
 if GetDepend(['PKG_NIMBLE_CTLR']):
     path += [
         cwd + '/nimble/transport/ram/include',
-        cwd + '/nimble/controller/include',
-        cwd + '/nimble/drivers/nrf52/include']
+        cwd + '/nimble/controller/include']
+        
+
+    if GetDepend(['PKG_NIMBLE_BSP_NRF51']):
+        path += [cwd + '/nimble/drivers/nrf51/include']
+        src += Split("""
+            nimble/drivers/nrf51/src/ble_hw.c
+            nimble/drivers/nrf51/src/ble_phy.c
+            """)
+    else:
+        path += [cwd + '/nimble/drivers/nrf52/include']
+        src += Split("""
+            nimble/drivers/nrf52/src/ble_hw.c
+            nimble/drivers/nrf52/src/ble_phy.c
+            """)
 
     src += Split("""
         nimble/transport/ram/src/ble_hci_ram.c
@@ -137,8 +150,6 @@ if GetDepend(['PKG_NIMBLE_CTLR']):
         nimble/controller/src/ble_ll_scan.c
         nimble/controller/src/ble_ll_dtm.c
         nimble/controller/src/ble_ll_hci_ev.c
-        nimble/drivers/nrf52/src/ble_hw.c
-        nimble/drivers/nrf52/src/ble_phy.c
         porting/nimble/src/os_cputime.c
         porting/nimble/src/os_cputime_pwr2.c
         porting/nimble/src/hal_timer.c
