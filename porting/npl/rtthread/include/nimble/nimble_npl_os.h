@@ -3,6 +3,7 @@
  *
  * Date           Author       Notes
  * 2018-12-18     ZeroFree     first implementation
+ * 2021-08-18     WaterFishJ   fix the include file name
  */
 
 #ifndef _NIMBLE_NPL_OS_H_
@@ -13,7 +14,7 @@
 #include <string.h>
 
 /* errno definitions for RT-Thread libc*/
-#include "libc/libc_errno.h"
+#include "errno.h"
 
 // TODO: _Static_assert support
 #ifndef _Static_assert
