@@ -3,6 +3,7 @@
  *
  * Date           Author       Notes
  * 2018-12-18     ChenYong     first implementation
+ * 2021-08-19     WaterFishJ   fix the assert bug
  */
 
 
@@ -18,10 +19,12 @@ static rt_thread_t ll_task_h;
 
 extern void ble_ll_task(void *arg);
 
+#ifdef RT_DEBUG
 RT_WEAK void __aeabi_assert(const char *expr, const char *file, int line)
 {
     rt_assert_handler(expr, file, line);
 }
+#endif
 
 int nimble_port_rtthread_init(void)
 {
