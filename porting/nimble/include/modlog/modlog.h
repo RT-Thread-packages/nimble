@@ -20,42 +20,49 @@
 #ifndef H_MODLOG_
 #define H_MODLOG_
 
-#include <stdint.h>
-#include "log/log.h"
+#include <stdio.h>
 
-extern void modlog_dummy(uint8_t level, const char *msg, ...);
+#include "log_common/log_common.h"
+#include "log/log.h"
 
 #define MODLOG_MODULE_DFLT 255
 
-#define MODLOG_LEVEL_ERROR    0
-#define MODLOG_LEVEL_WARING   1
-#define MODLOG_LEVEL_INFO     2
-#define MODLOG_LEVEL_LOG      3
-#define MODLOG_LEVEL_RAW      4
-#define MODLOG_LEVEL_CRITICAL 5
-
+#if MYNEWT_VAL(LOG_LEVEL) <= LOG_LEVEL_DEBUG || defined __DOXYGEN__
 #define MODLOG_DEBUG(ml_mod_, ml_msg_, ...) \
-    modlog_dummy(MODLOG_LEVEL_LOG, (ml_msg_), ##__VA_ARGS__)
+    printf((ml_msg_), ##__VA_ARGS__)
+#else
+#define MODLOG_DEBUG(ml_mod_, ...) IGNORE(__VA_ARGS__)
+#endif
 
+#if MYNEWT_VAL(LOG_LEVEL) <= LOG_LEVEL_INFO || defined __DOXYGEN__
 #define MODLOG_INFO(ml_mod_, ml_msg_, ...) \
-    modlog_dummy(MODLOG_LEVEL_INFO, (ml_msg_), ##__VA_ARGS__)
+    printf((ml_msg_), ##__VA_ARGS__)
+#else
+#define MODLOG_INFO(ml_mod_, ...) IGNORE(__VA_ARGS__)
+#endif
 
+#if MYNEWT_VAL(LOG_LEVEL) <= LOG_LEVEL_WARN || defined __DOXYGEN__
 #define MODLOG_WARN(ml_mod_, ml_msg_, ...) \
-    modlog_dummy(MODLOG_LEVEL_WARING, (ml_msg_), ##__VA_ARGS__)
+    printf((ml_msg_), ##__VA_ARGS__)
+#else
+#define MODLOG_WARN(ml_mod_, ...) IGNORE(__VA_ARGS__)
+#endif
 
+#if MYNEWT_VAL(LOG_LEVEL) <= LOG_LEVEL_ERROR || defined __DOXYGEN__
 #define MODLOG_ERROR(ml_mod_, ml_msg_, ...) \
-    modlog_dummy(MODLOG_LEVEL_ERROR, (ml_msg_), ##__VA_ARGS__)
+    printf((ml_msg_), ##__VA_ARGS__)
+#else
+#define MODLOG_ERROR(ml_mod_, ...) IGNORE(__VA_ARGS__)
+#endif
 
-#define MODLOG_RAW(ml_mod_, ml_msg_, ...) \
-    modlog_dummy(MODLOG_LEVEL_RAW, (ml_msg_), ##__VA_ARGS__)
-
+#if MYNEWT_VAL(LOG_LEVEL) <= LOG_LEVEL_CRITICAL || defined __DOXYGEN__
 #define MODLOG_CRITICAL(ml_mod_, ml_msg_, ...) \
-    modlog_dummy(MODLOG_LEVEL_CRITICAL, (ml_msg_), ##__VA_ARGS__)
+    printf((ml_msg_), ##__VA_ARGS__)
+#else
+#define MODLOG_CRITICAL(ml_mod_, ...) IGNORE(__VA_ARGS__)
+#endif
 
 #define MODLOG(ml_lvl_, ml_mod_, ...) \
     MODLOG_ ## ml_lvl_((ml_mod_), __VA_ARGS__)
-
-#define MODLOG_DFLT(ml_lvl_, ...) \
-    MODLOG(ml_lvl_, LOG_MODULE_DEFAULT, __VA_ARGS__)
 
 #endif

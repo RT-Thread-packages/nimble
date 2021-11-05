@@ -19,6 +19,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 #include <pthread.h>
 #include "nimble/nimble_npl.h"
@@ -37,6 +38,7 @@ static struct ble_npl_task s_task_hci;
 void nimble_host_task(void *param);
 void ble_hci_sock_ack_handler(void *param);
 void ble_hci_sock_init(void);
+void ble_hci_sock_set_device(int dev);
 
 #define TASK_DEFAULT_PRIORITY       1
 #define TASK_DEFAULT_STACK          NULL
@@ -54,10 +56,17 @@ void *ble_host_task(void *param)
     return NULL;
 }
 
-int main(void)
+int main(int argc, char *argv[])
 {
-    ble_hci_sock_init();
+    int ret = 0;
+
+    /* allow to specify custom hci */
+    if (argc > 1) {
+        ble_hci_sock_set_device(atoi(argv[1]));
+    }
+
     nimble_port_init();
+    ble_hci_sock_init();
 
     /* This example provides GATT Alert service */
     ble_svc_gap_init();
@@ -71,19 +80,13 @@ int main(void)
     ble_store_ram_init();
 
     ble_npl_task_init(&s_task_hci, "hci_sock", ble_hci_sock_task,
-                      NULL, TASK_DEFAULT_PRIORITY, BLE_NPL_WAIT_FOREVER,
+                      NULL, TASK_DEFAULT_PRIORITY, BLE_NPL_TIME_FOREVER,
                       TASK_DEFAULT_STACK, TASK_DEFAULT_STACK_SIZE);
 
     /* Create task which handles default event queue for host stack. */
     ble_npl_task_init(&s_task_host, "ble_host", ble_host_task,
-                      NULL, TASK_DEFAULT_PRIORITY, BLE_NPL_WAIT_FOREVER, 
+                      NULL, TASK_DEFAULT_PRIORITY, BLE_NPL_TIME_FOREVER,
                       TASK_DEFAULT_STACK, TASK_DEFAULT_STACK_SIZE);
 
-    int ret = 0;
-    pthread_exit(&ret);         
-         
-    while (true)
-    {
-        pthread_yield();
-    }
+    pthread_exit(&ret);
 }

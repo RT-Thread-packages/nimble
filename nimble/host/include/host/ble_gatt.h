@@ -143,7 +143,7 @@ typedef int ble_gatt_chr_fn(uint16_t conn_handle,
 
 typedef int ble_gatt_dsc_fn(uint16_t conn_handle,
                             const struct ble_gatt_error *error,
-                            uint16_t chr_def_handle,
+                            uint16_t chr_val_handle,
                             const struct ble_gatt_dsc *dsc,
                             void *arg);
 
@@ -790,9 +790,9 @@ int ble_gatts_count_cfg(const struct ble_gatt_svc_def *defs);
  * Send notification (or indication) to any connected devices that have
  * subscribed for notification (or indication) for specified characteristic.
  *
- * @param chr_def_handle        Characteristic definition handle
+ * @param chr_val_handle        Characteristic value handle
  */
-void ble_gatts_chr_updated(uint16_t chr_def_handle);
+void ble_gatts_chr_updated(uint16_t chr_val_handle);
 
 /**
  * Retrieves the attribute handle associated with a local GATT service.
@@ -835,7 +835,7 @@ int ble_gatts_find_chr(const ble_uuid_t *svc_uuid, const ble_uuid_t *chr_uuid,
  * @param chr_uuid              The UUID of the parent characteristic.
  * @param dsc_uuid              The UUID of the descriptor ro look up.
  * @param out_handle            On success, populated with the handle
- *                                  of the descripytor attribute.  Pass null if
+ *                                  of the descriptor attribute.  Pass null if
  *                                  you don't need this value.
  *
  * @return                      0 on success;
@@ -848,7 +848,8 @@ int ble_gatts_find_dsc(const ble_uuid_t *svc_uuid, const ble_uuid_t *chr_uuid,
 
 typedef void (*ble_gatt_svc_foreach_fn)(const struct ble_gatt_svc_def *svc,
                                         uint16_t handle,
-                                        uint16_t end_group_handle);
+                                        uint16_t end_group_handle,
+                                        void *arg);
 
 /**
  * Prints dump of local GATT database. This is useful to log local state of

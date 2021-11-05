@@ -36,7 +36,6 @@
 #include "host/ble_hs_id.h"
 #include "host/ble_hs_hci.h"
 #include "host/ble_hs_log.h"
-#include "host/ble_hs_test.h"
 #include "host/ble_hs_mbuf.h"
 #include "host/ble_hs_stop.h"
 #include "host/ble_ibeacon.h"
@@ -95,6 +94,7 @@ extern "C" {
 #define BLE_HS_ESTORE_FAIL          28
 #define BLE_HS_EPREEMPTED           29
 #define BLE_HS_EDISABLED            30
+#define BLE_HS_ESTALLED             31
 
 /** Error base for ATT errors */
 #define BLE_HS_ERR_ATT_BASE         0x100

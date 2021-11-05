@@ -17,6 +17,9 @@
  * under the License.
  */
 
+#include "syscfg/syscfg.h"
+#define MESH_LOG_MODULE BLE_MESH_LOG
+
 #include "mesh/glue.h"
 #include "adv.h"
 #ifndef MYNEWT
@@ -27,23 +30,7 @@
 #include "base64/base64.h"
 #endif
 
-#define BT_DBG_ENABLED (MYNEWT_VAL(BLE_MESH_DEBUG))
-
-#if MYNEWT_VAL(BLE_EXT_ADV)
-#define BT_MESH_ADV_INST     (MYNEWT_VAL(BLE_MULTI_ADV_INSTANCES))
-
-#if MYNEWT_VAL(BLE_MESH_PROXY)
-/* Note that BLE_MULTI_ADV_INSTANCES contains number of additional instances.
- * Instance 0 is always there
- */
-#if MYNEWT_VAL(BLE_MULTI_ADV_INSTANCES) < 1
-#error "Mesh needs at least BLE_MULTI_ADV_INSTANCES set to 1"
-#endif
-#define BT_MESH_ADV_GATT_INST     (MYNEWT_VAL(BLE_MULTI_ADV_INSTANCES) - 1)
-#endif /* BLE_MESH_PROXY */
-#endif /* BLE_EXT_ADV */
-
-extern u8_t g_mesh_addr_type;
+extern uint8_t g_mesh_addr_type;
 
 #if MYNEWT_VAL(BLE_EXT_ADV)
 /* Store configuration for different bearers */
@@ -57,8 +44,8 @@ bt_hex(const void *buf, size_t len)
 {
     static const char hex[] = "0123456789abcdef";
     static char hexbufs[4][137];
-    static u8_t curbuf;
-    const u8_t *b = buf;
+    static uint8_t curbuf;
+    const uint8_t *b = buf;
     char *str;
     int i;
 
@@ -228,6 +215,14 @@ net_buf_simple_add_be16(struct os_mbuf *om, uint16_t val)
 }
 
 void
+net_buf_simple_add_le24(struct os_mbuf *om, uint32_t val)
+{
+    val = htole32(val);
+    os_mbuf_append(om, &val, 3);
+    ASSERT_NOT_CHAIN(om);
+}
+
+void
 net_buf_simple_add_be32(struct os_mbuf *om, uint32_t val)
 {
     val = htobe32(val);
@@ -283,6 +278,22 @@ net_buf_simple_push_be16(struct os_mbuf *om, uint16_t val)
 }
 
 void
+net_buf_simple_push_be24(struct os_mbuf *om, uint32_t val)
+{
+    uint8_t headroom = om->om_data - &om->om_databuf[om->om_pkthdr_len];
+
+    assert(headroom >= 3);
+    om->om_data -= 3;
+    put_be24(om->om_data, val);
+    om->om_len += 3;
+
+    if (om->om_pkthdr_len) {
+        OS_MBUF_PKTHDR(om)->omp_len += 3;
+    }
+    ASSERT_NOT_CHAIN(om);
+}
+
+void
 net_buf_simple_push_u8(struct os_mbuf *om, uint8_t val)
 {
     uint8_t headroom = om->om_data - &om->om_databuf[om->om_pkthdr_len];
@@ -320,6 +331,15 @@ net_buf_simple_pull(struct os_mbuf *om, uint8_t len)
     return om->om_data;
 }
 
+void *
+net_buf_simple_pull_mem(struct os_mbuf *om, uint8_t len)
+{
+    void *data = om->om_data;
+
+    net_buf_simple_pull(om, len);
+    return data;
+}
+
 void*
 net_buf_simple_add(struct os_mbuf *om, uint8_t len)
 {
@@ -337,7 +357,7 @@ k_fifo_is_empty(struct ble_npl_eventq *q)
     return ble_npl_eventq_is_empty(q);
 }
 
-void * net_buf_get(struct ble_npl_eventq *fifo, s32_t t)
+void * net_buf_get(struct ble_npl_eventq *fifo, int32_t t)
 {
     struct ble_npl_event *ev = ble_npl_eventq_get(fifo, 0);
 
@@ -386,6 +406,12 @@ k_delayed_work_init(struct k_delayed_work *w, ble_npl_event_fn *f)
 #else
     ble_npl_callout_init(&w->work, ble_npl_eventq_dflt_get(), f, NULL);
 #endif
+}
+
+bool
+k_delayed_work_pending(struct k_delayed_work *w)
+{
+    return ble_npl_callout_is_active(&w->work);
 }
 
 void
@@ -444,7 +470,7 @@ int64_t k_uptime_get(void)
     return ble_npl_time_ticks_to_ms32(ble_npl_time_get());
 }
 
-u32_t k_uptime_get_32(void)
+uint32_t k_uptime_get_32(void)
 {
     return k_uptime_get();
 }
@@ -463,7 +489,7 @@ static uint8_t priv[32];
 static bool has_pub = false;
 
 int
-bt_dh_key_gen(const u8_t remote_pk[64], bt_dh_key_cb_t cb)
+bt_dh_key_gen(const uint8_t remote_pk[64], bt_dh_key_cb_t cb)
 {
     uint8_t dh[32];
 
@@ -514,7 +540,7 @@ bt_pub_key_get(void)
 }
 
 static int
-set_ad(const struct bt_data *ad, size_t ad_len, u8_t *buf, u8_t *buf_len)
+set_ad(const struct bt_data *ad, size_t ad_len, uint8_t *buf, uint8_t *buf_len)
 {
     int i;
 
@@ -843,13 +869,58 @@ void net_buf_slist_remove(struct net_buf_slist_t *list, struct os_mbuf *prev,
 void net_buf_slist_merge_slist(struct net_buf_slist_t *list,
 			       struct net_buf_slist_t *list_to_append)
 {
-	struct os_mbuf_pkthdr *pkthdr;
+	if (!STAILQ_EMPTY(list_to_append)) {
+		*(list)->stqh_last = list_to_append->stqh_first;
+		(list)->stqh_last = list_to_append->stqh_last;
+		STAILQ_INIT(list_to_append);
+	}
+}
 
-	STAILQ_FOREACH(pkthdr, list_to_append, omp_next) {
-		STAILQ_INSERT_TAIL(list, pkthdr, omp_next);
+/** Memory slab methods */
+extern void  k_mem_slab_free(struct k_mem_slab *slab, void **mem)
+{
+    **(char ***)mem = slab->free_list;
+    slab->free_list = *(char **)mem;
+    slab->num_used--;
+}
+
+extern int k_mem_slab_alloc(struct k_mem_slab *slab, void **mem)
+{
+	int result;
+
+	if (slab->free_list != NULL) {
+		/* take a free block */
+		*mem = slab->free_list;
+		slab->free_list = *(char **)(slab->free_list);
+		slab->num_used++;
+		result = 0;
+	} else {
+		*mem = NULL;
+		result = -ENOMEM;
+	}
+	return result;
+}
+
+int create_free_list(struct k_mem_slab *slab)
+{
+	uint32_t j;
+	char *p;
+
+    /* blocks must be word aligned */
+    if(((slab->block_size | (uintptr_t)slab->buffer) &
+				(sizeof(void *) - 1)) != 0) {
+		return -EINVAL;
 	}
 
-	STAILQ_INIT(list);
+	slab->free_list = NULL;
+	p = slab->buffer;
+
+	for (j = 0U; j < slab->num_blocks; j++) {
+		*(char **)p = slab->free_list;
+		slab->free_list = p;
+		p += slab->block_size;
+	}
+	return 0;
 }
 
 #if MYNEWT_VAL(BLE_MESH_SETTINGS)
@@ -860,7 +931,8 @@ int settings_bytes_from_str(char *val_str, void *vp, int *len)
     return 0;
 }
 
-char *settings_str_from_bytes(void *vp, int vp_len, char *buf, int buf_len)
+char *settings_str_from_bytes(const void *vp, int vp_len,
+			      char *buf, int buf_len)
 {
     if (BASE64_ENCODE_SIZE(vp_len) > buf_len) {
         return NULL;
@@ -872,4 +944,3 @@ char *settings_str_from_bytes(void *vp, int vp_len, char *buf, int buf_len)
 }
 
 #endif /* MYNEWT_VAL(BLE_MESH_SETTINGS) */
-

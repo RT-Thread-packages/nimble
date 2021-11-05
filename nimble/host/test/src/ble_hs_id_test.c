@@ -23,7 +23,7 @@
 #include "testutil/testutil.h"
 #include "nimble/hci_common.h"
 #include "host/ble_hs_adv.h"
-#include "host/ble_hs_test.h"
+#include "ble_hs_test.h"
 #include "ble_hs_test_util.h"
 
 static int
@@ -36,7 +36,7 @@ ble_hs_id_test_util_infer_auto(int privacy, uint8_t *own_addr_type)
     return rc;
 }
 
-TEST_CASE(ble_hs_id_test_case_auto_none)
+TEST_CASE_SELF(ble_hs_id_test_case_auto_none)
 {
     uint8_t own_addr_type;
     int rc;
@@ -48,9 +48,11 @@ TEST_CASE(ble_hs_id_test_case_auto_none)
 
     rc = ble_hs_id_test_util_infer_auto(0, &own_addr_type);
     TEST_ASSERT_FATAL(rc == BLE_HS_ENOADDR);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_hs_id_test_case_auto_public)
+TEST_CASE_SELF(ble_hs_id_test_case_auto_public)
 {
     uint8_t own_addr_type;
     int rc;
@@ -60,9 +62,11 @@ TEST_CASE(ble_hs_id_test_case_auto_public)
     rc = ble_hs_id_test_util_infer_auto(0, &own_addr_type);
     TEST_ASSERT_FATAL(rc == 0);
     TEST_ASSERT(own_addr_type == BLE_OWN_ADDR_PUBLIC);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_hs_id_test_case_auto_random)
+TEST_CASE_SELF(ble_hs_id_test_case_auto_random)
 {
     uint8_t own_addr_type;
     int rc;
@@ -75,9 +79,11 @@ TEST_CASE(ble_hs_id_test_case_auto_random)
     rc = ble_hs_id_test_util_infer_auto(0, &own_addr_type);
     TEST_ASSERT_FATAL(rc == 0);
     TEST_ASSERT(own_addr_type == BLE_OWN_ADDR_RANDOM);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_hs_id_test_case_auto_rpa_pub)
+TEST_CASE_SELF(ble_hs_id_test_case_auto_rpa_pub)
 {
     uint8_t own_addr_type;
     int rc;
@@ -87,9 +93,11 @@ TEST_CASE(ble_hs_id_test_case_auto_rpa_pub)
     rc = ble_hs_id_test_util_infer_auto(1, &own_addr_type);
     TEST_ASSERT_FATAL(rc == 0);
     TEST_ASSERT(own_addr_type == BLE_OWN_ADDR_RPA_PUBLIC_DEFAULT);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_hs_id_test_case_auto_rpa_rnd)
+TEST_CASE_SELF(ble_hs_id_test_case_auto_rpa_rnd)
 {
     uint8_t own_addr_type;
     int rc;
@@ -102,23 +110,15 @@ TEST_CASE(ble_hs_id_test_case_auto_rpa_rnd)
     rc = ble_hs_id_test_util_infer_auto(1, &own_addr_type);
     TEST_ASSERT_FATAL(rc == 0);
     TEST_ASSERT(own_addr_type == BLE_OWN_ADDR_RPA_RANDOM_DEFAULT);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
 TEST_SUITE(ble_hs_id_test_suite_auto)
 {
-    tu_suite_set_post_test_cb(ble_hs_test_util_post_test, NULL);
-
     ble_hs_id_test_case_auto_none();
     ble_hs_id_test_case_auto_public();
     ble_hs_id_test_case_auto_random();
     ble_hs_id_test_case_auto_rpa_pub();
     ble_hs_id_test_case_auto_rpa_rnd();
-}
-
-int
-ble_hs_id_test_all(void)
-{
-    ble_hs_id_test_suite_auto();
-
-    return tu_any_failed;
 }

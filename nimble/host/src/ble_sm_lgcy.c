@@ -24,6 +24,7 @@
 #include "host/ble_sm.h"
 #include "ble_hs_priv.h"
 
+#if NIMBLE_BLE_CONNECT
 #if MYNEWT_VAL(BLE_SM_LEGACY)
 
 /**
@@ -35,7 +36,7 @@
 #define IOACT_INPUT BLE_SM_IOACT_INPUT
 #define IOACT_DISP  BLE_SM_IOACT_DISP
 
-/* This is the initiator passkey action action dpeneding on the io
+/* This is the initiator passkey action action depending on the io
  * capabilties of both parties
  */
 static const uint8_t ble_sm_lgcy_init_ioa[5 /*resp*/ ][5 /*init*/ ] =
@@ -251,4 +252,5 @@ ble_sm_lgcy_random_rx(struct ble_sm_proc *proc, struct ble_sm_result *res)
     res->execute = 1;
 }
 
+#endif
 #endif

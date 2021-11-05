@@ -22,11 +22,13 @@
 #include <string.h>
 #include "nimble/hci_common.h"
 #include "nimble/ble_hci_trans.h"
-#include "host/ble_hs_test.h"
+#include "ble_hs_test.h"
 #include "testutil/testutil.h"
 #include "ble_hs_test_util.h"
 
-TEST_CASE(ble_hs_hci_test_event_bad)
+#define BLE_HCI_READ_RSSI_ACK_PARAM_LEN     (3)  /* No status byte. */
+
+TEST_CASE_SELF(ble_hs_hci_test_event_bad)
 {
     uint8_t *buf;
     int rc;
@@ -37,11 +39,13 @@ TEST_CASE(ble_hs_hci_test_event_bad)
 
     buf[0] = 0xff;
     buf[1] = 0;
-    rc = ble_hs_hci_evt_process(buf);
+    rc = ble_hs_hci_evt_process((void*)buf);
     TEST_ASSERT(rc == BLE_HS_ENOTSUP);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_hs_hci_test_rssi)
+TEST_CASE_SELF(ble_hs_hci_test_rssi)
 {
     uint8_t params[BLE_HCI_READ_RSSI_ACK_PARAM_LEN];
     uint16_t opcode;
@@ -81,12 +85,13 @@ TEST_CASE(ble_hs_hci_test_rssi)
     ble_hs_test_util_hci_ack_set_params(opcode, 0, params, sizeof params + 1);
     rc = ble_hs_hci_util_read_rssi(1, &rssi);
     TEST_ASSERT(rc == BLE_HS_ECONTROLLER);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_hs_hci_acl_one_conn)
+TEST_CASE_SELF(ble_hs_hci_acl_one_conn)
 {
     struct ble_hs_test_util_hci_num_completed_pkts_entry ncpe[2];
-    struct hci_disconn_complete evt;
     uint8_t peer_addr[6] = { 1, 2, 3, 4, 5, 6 };
     uint8_t data[256];
     int rc;
@@ -99,8 +104,8 @@ TEST_CASE(ble_hs_hci_acl_one_conn)
 
     ble_hs_test_util_init();
 
-    /* The controller has room for five 20-byte payloads (+ 4-byte header). */
-    rc = ble_hs_hci_set_buf_sz(24, 5);
+    /* The controller has room for five 20-byte payloads. */
+    rc = ble_hs_hci_set_buf_sz(20, 5);
     TEST_ASSERT_FATAL(rc == 0);
     TEST_ASSERT_FATAL(ble_hs_hci_avail_pkts == 5);
 
@@ -160,14 +165,13 @@ TEST_CASE(ble_hs_hci_acl_one_conn)
     /* Receive a disconnection-complete event. Ensure available buffer count
      * increases.
      */
-    evt.connection_handle = 1;
-    evt.status = 0;
-    evt.reason = BLE_ERR_CONN_TERM_LOCAL;
-    ble_hs_test_util_hci_rx_disconn_complete_event(&evt);
+    ble_hs_test_util_hci_rx_disconn_complete_event(1, 0, BLE_ERR_CONN_TERM_LOCAL);
     TEST_ASSERT_FATAL(ble_hs_hci_avail_pkts == 5);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_hs_hci_acl_two_conn)
+TEST_CASE_SELF(ble_hs_hci_acl_two_conn)
 {
     struct ble_hs_test_util_hci_num_completed_pkts_entry ncpe[2];
     const struct ble_hs_conn *conn1;
@@ -185,8 +189,8 @@ TEST_CASE(ble_hs_hci_acl_two_conn)
 
     ble_hs_test_util_init();
 
-    /* The controller has room for five 20-byte payloads (+ 4-byte header). */
-    rc = ble_hs_hci_set_buf_sz(24, 5);
+    /* The controller has room for five 20-byte payloads*/
+    rc = ble_hs_hci_set_buf_sz(20, 5);
     TEST_ASSERT_FATAL(rc == 0);
     TEST_ASSERT_FATAL(ble_hs_hci_avail_pkts == 5);
 
@@ -325,21 +329,14 @@ TEST_CASE(ble_hs_hci_acl_two_conn)
     ble_hs_test_util_verify_tx_write_cmd(100, data + 10, 25);
     ble_hs_test_util_verify_tx_write_cmd(100, data + 20, 70);
     ble_hs_test_util_verify_tx_write_cmd(100, data + 30, 70);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
 TEST_SUITE(ble_hs_hci_suite)
 {
-    tu_suite_set_post_test_cb(ble_hs_test_util_post_test, NULL);
-
     ble_hs_hci_test_event_bad();
     ble_hs_hci_test_rssi();
     ble_hs_hci_acl_one_conn();
     ble_hs_hci_acl_two_conn();
-}
-
-int
-ble_hs_hci_test_all(void)
-{
-    ble_hs_hci_suite();
-    return tu_any_failed;
 }

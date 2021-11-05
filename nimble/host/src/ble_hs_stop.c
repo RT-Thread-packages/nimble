@@ -21,9 +21,12 @@
 #include "sysinit/sysinit.h"
 #include "syscfg/syscfg.h"
 #include "ble_hs_priv.h"
+#include "nimble/nimble_npl.h"
+#ifndef MYNEWT
+#include "nimble/nimble_port.h"
+#endif
 
-static ble_npl_event_fn ble_hs_stop_term_event_cb;
-static struct ble_npl_event ble_hs_stop_term_ev;
+#define BLE_HOST_STOP_TIMEOUT_MS MYNEWT_VAL(BLE_HS_STOP_ON_SHUTDOWN_TIMEOUT)
 
 static struct ble_gap_event_listener ble_hs_stop_gap_listener;
 
@@ -33,6 +36,11 @@ static struct ble_gap_event_listener ble_hs_stop_gap_listener;
 SLIST_HEAD(ble_hs_stop_listener_slist, ble_hs_stop_listener);
 static struct ble_hs_stop_listener_slist ble_hs_stop_listeners;
 
+/* Track number of connections */
+static uint8_t ble_hs_stop_conn_cnt;
+
+static struct ble_npl_callout ble_hs_stop_terminate_tmo;
+
 /**
  * Called when a stop procedure has completed.
  */
@@ -41,6 +49,8 @@ ble_hs_stop_done(int status)
 {
     struct ble_hs_stop_listener_slist slist;
     struct ble_hs_stop_listener *listener;
+
+    ble_npl_callout_stop(&ble_hs_stop_terminate_tmo);
 
     ble_hs_lock();
 
@@ -58,47 +68,78 @@ ble_hs_stop_done(int status)
     }
 }
 
+#if MYNEWT_VAL(BLE_PERIODIC_ADV)
 /**
- * Terminates the first open connection.
+ * Terminates all active periodic sync handles
  *
- * If there are no open connections, signals completion of the close procedure.
+ * If there are no active periodic sync handles, signals completion of the
+ * close procedure.
  */
-static void
-ble_hs_stop_terminate_next_conn(void)
+static int
+ble_hs_stop_terminate_all_periodic_sync(void)
 {
-    uint16_t handle;
-    int rc;
+    int rc = 0;
+    struct ble_hs_periodic_sync *psync;
+    uint16_t sync_handle;
 
-    handle = ble_hs_atomic_first_conn_handle();
-    if (handle == BLE_HS_CONN_HANDLE_NONE) {
-        /* No open connections.  Signal completion of the stop procedure. */
-        ble_hs_stop_done(0);
-        return;
+    while((psync = ble_hs_periodic_sync_first())){
+        /* Terminate sync command waits a command complete event, so there
+         * is no need to wait for GAP event, as the calling thread will be
+         * blocked on the hci semaphore until the command complete is received.
+         *
+         * Also, once the sync is terminated, the psync will be freed and
+         * removed from the list such that the next call to
+         * ble_hs_periodic_sync_first yields the next psync handle
+         */
+        sync_handle = psync->sync_handle;
+        rc = ble_gap_periodic_adv_sync_terminate(sync_handle);
+        if (rc != 0 && rc != BLE_HS_ENOTCONN) {
+            BLE_HS_LOG(ERROR, "failed to terminate periodic sync=0x%04x, rc=%d\n",
+                       sync_handle, rc);
+            return rc;
+        }
     }
 
-    rc = ble_gap_terminate(handle, BLE_ERR_REM_USER_CONN_TERM);
+    return 0;
+}
+#endif
+
+/**
+ * Terminates connection.
+ */
+static int
+ble_hs_stop_terminate_conn(struct ble_hs_conn *conn, void *arg)
+{
+    int rc;
+
+    rc = ble_gap_terminate_with_conn(conn, BLE_ERR_REM_USER_CONN_TERM);
     if (rc == 0) {
         /* Terminate procedure successfully initiated.  Let the GAP event
          * handler deal with the result.
          */
+        ble_hs_stop_conn_cnt++;
     } else {
-        BLE_HS_LOG(ERROR,
-            "ble_hs_stop: failed to terminate connection; rc=%d\n", rc);
-        ble_hs_stop_done(rc);
+        /* If failed, just make sure we are not going to wait for connection complete event,
+         * just count it as already disconnected
+         */
+        BLE_HS_LOG(ERROR, "ble_hs_stop: failed to terminate connection; rc=%d\n", rc);
     }
+
+    return 0;
 }
 
 /**
- * Event handler.  Attempts to terminate the first open connection if there is
- * one.  All additional connections are terminated elsewhere in the GAP event
- * handler.
- *
- * If there are no connections, signals completion of the stop procedure.
+ * This is called when host graceful disconnect timeout fires. That means some devices
+ * are out of range and disconnection completed did no happen yet.
  */
 static void
-ble_hs_stop_term_event_cb(struct ble_npl_event *ev)
+ble_hs_stop_terminate_timeout_cb(struct ble_npl_event *ev)
 {
-    ble_hs_stop_terminate_next_conn();
+    BLE_HS_LOG(ERROR, "ble_hs_stop_terminate_timeout_cb,"
+                      "%d connection(s) still up \n", ble_hs_stop_conn_cnt);
+
+    /* TODO: Shall we send error here? */
+    ble_hs_stop_done(0);
 }
 
 /**
@@ -114,7 +155,11 @@ ble_hs_stop_gap_event(struct ble_gap_event *event, void *arg)
     if (event->type == BLE_GAP_EVENT_DISCONNECT ||
         event->type == BLE_GAP_EVENT_TERM_FAILURE) {
 
-        ble_hs_stop_terminate_next_conn();
+        ble_hs_stop_conn_cnt--;
+
+        if (ble_hs_stop_conn_cnt == 0) {
+            ble_hs_stop_done(0);
+        }
     }
 
     return 0;
@@ -196,17 +241,31 @@ ble_hs_stop(struct ble_hs_stop_listener *listener,
     ble_gap_preempt();
     ble_gap_preempt_done();
 
+#if MYNEWT_VAL(BLE_PERIODIC_ADV)
+    /* Check for active periodic sync first and terminate it all */
+    rc = ble_hs_stop_terminate_all_periodic_sync();
+    if (rc != 0) {
+        return rc;
+    }
+#endif
+
     rc = ble_gap_event_listener_register(&ble_hs_stop_gap_listener,
                                          ble_hs_stop_gap_event, NULL);
     if (rc != 0) {
         return rc;
     }
 
-    /* Schedule termination of all open connections in the host task.  This is
-     * done even if there are no open connections so that the result of the
-     * stop procedure is signaled in a consistent manner (asynchronously).
-     */
-    ble_npl_eventq_put(ble_hs_evq_get(), &ble_hs_stop_term_ev);
+    ble_hs_lock();
+    ble_hs_conn_foreach(ble_hs_stop_terminate_conn, NULL);
+    ble_hs_unlock();
+
+    if (ble_hs_stop_conn_cnt > 0) {
+        ble_npl_callout_reset(&ble_hs_stop_terminate_tmo,
+                              ble_npl_time_ms_to_ticks32(BLE_HOST_STOP_TIMEOUT_MS));
+    } else {
+        /* No connections, stop is completed */
+        ble_hs_stop_done(0);
+    }
 
     return 0;
 }
@@ -214,5 +273,11 @@ ble_hs_stop(struct ble_hs_stop_listener *listener,
 void
 ble_hs_stop_init(void)
 {
-    ble_npl_event_init(&ble_hs_stop_term_ev, ble_hs_stop_term_event_cb, NULL);
+#ifdef MYNEWT
+    ble_npl_callout_init(&ble_hs_stop_terminate_tmo, ble_npl_eventq_dflt_get(),
+                         ble_hs_stop_terminate_timeout_cb, NULL);
+#else
+    ble_npl_callout_init(&ble_hs_stop_terminate_tmo, nimble_port_get_dflt_eventq(),
+                         ble_hs_stop_terminate_timeout_cb, NULL);
+#endif
 }

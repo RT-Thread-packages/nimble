@@ -22,7 +22,7 @@
 #include "testutil/testutil.h"
 #include "nimble/ble.h"
 #include "host/ble_uuid.h"
-#include "host/ble_hs_test.h"
+#include "ble_hs_test.h"
 #include "ble_hs_test_util.h"
 
 #define BLE_GATTS_NOTIFY_TEST_CHR_1_UUID    0x1111
@@ -562,7 +562,7 @@ ble_gatts_notify_test_restore_bonding(uint16_t conn_handle,
     }
 }
 
-TEST_CASE(ble_gatts_notify_test_n)
+TEST_CASE_SELF(ble_gatts_notify_test_n)
 {
     static const uint8_t fourbytes[] = { 1, 2, 3, 4 };
     struct os_mbuf *om;
@@ -655,9 +655,11 @@ TEST_CASE(ble_gatts_notify_test_n)
     flags = ble_gatts_notify_test_misc_read_notify(
         conn_handle, ble_gatts_notify_test_chr_2_def_handle);
     TEST_ASSERT(flags == 0);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_gatts_notify_test_i)
+TEST_CASE_SELF(ble_gatts_notify_test_i)
 {
     static const uint8_t fourbytes[] = { 1, 2, 3, 4 };
     struct os_mbuf *om;
@@ -765,9 +767,11 @@ TEST_CASE(ble_gatts_notify_test_i)
     flags = ble_gatts_notify_test_misc_read_notify(
         conn_handle, ble_gatts_notify_test_chr_2_def_handle);
     TEST_ASSERT(flags == 0);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_gatts_notify_test_bonded_n)
+TEST_CASE_SELF(ble_gatts_notify_test_bonded_n)
 {
     uint16_t conn_handle;
     uint16_t flags;
@@ -829,9 +833,11 @@ TEST_CASE(ble_gatts_notify_test_bonded_n)
 
     /* Ensure both CCCDs still persisted. */
     TEST_ASSERT(ble_hs_test_util_num_cccds() == 2);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_gatts_notify_test_bonded_i)
+TEST_CASE_SELF(ble_gatts_notify_test_bonded_i)
 {
     uint16_t conn_handle;
     uint16_t flags;
@@ -917,9 +923,11 @@ TEST_CASE(ble_gatts_notify_test_bonded_i)
 
     /* Ensure both CCCDs still persisted. */
     TEST_ASSERT(ble_hs_test_util_num_cccds() == 2);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_gatts_notify_test_bonded_i_no_ack)
+TEST_CASE_SELF(ble_gatts_notify_test_bonded_i_no_ack)
 {
     struct ble_store_value_cccd value_cccd;
     struct ble_store_key_cccd key_cccd;
@@ -990,9 +998,11 @@ TEST_CASE(ble_gatts_notify_test_bonded_i_no_ack)
     rc = ble_store_read_cccd(&key_cccd, &value_cccd);
     TEST_ASSERT_FATAL(rc == 0);
     TEST_ASSERT(!value_cccd.value_changed);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_gatts_notify_test_disallowed)
+TEST_CASE_SELF(ble_gatts_notify_test_disallowed)
 {
     uint16_t chr1_val_handle;
     uint16_t chr2_val_handle;
@@ -1057,12 +1067,12 @@ TEST_CASE(ble_gatts_notify_test_disallowed)
     /* Attempt to enable indications on chr3 should succeed. */
     ble_gatts_notify_test_misc_try_enable_notify(
         2, chr3_val_handle - 1, BLE_GATTS_CLT_CFG_F_INDICATE, 0);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
 TEST_SUITE(ble_gatts_notify_suite)
 {
-    tu_suite_set_post_test_cb(ble_hs_test_util_post_test, NULL);
-
     ble_gatts_notify_test_n();
     ble_gatts_notify_test_i();
 
@@ -1077,12 +1087,4 @@ TEST_SUITE(ble_gatts_notify_suite)
      *     o Bonding after CCCD configuration.
      *     o Disconnect prior to rx of indicate ack.
      */
-}
-
-int
-ble_gatts_notify_test_all(void)
-{
-    ble_gatts_notify_suite();
-
-    return tu_any_failed;
 }

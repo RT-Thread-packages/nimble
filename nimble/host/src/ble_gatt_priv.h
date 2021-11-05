@@ -176,12 +176,16 @@ struct ble_gatt_resources {
 int ble_gatts_rx_indicate_ack(uint16_t conn_handle, uint16_t chr_val_handle);
 int ble_gatts_send_next_indicate(uint16_t conn_handle);
 void ble_gatts_tx_notifications(void);
+void ble_gatts_bonding_established(uint16_t conn_handle);
 void ble_gatts_bonding_restored(uint16_t conn_handle);
 void ble_gatts_connection_broken(uint16_t conn_handle);
-void ble_gatts_lcl_svc_foreach(ble_gatt_svc_foreach_fn cb);
+void ble_gatts_lcl_svc_foreach(ble_gatt_svc_foreach_fn cb, void *arg);
 int ble_gatts_register_svcs(const struct ble_gatt_svc_def *svcs,
                             ble_gatt_register_fn *register_cb,
                             void *cb_arg);
+int ble_gatts_clt_cfg_access(uint16_t conn_handle, uint16_t attr_handle,
+                             uint8_t op, uint16_t offset, struct os_mbuf **om,
+                             void *arg);
 
 /*** @misc. */
 int ble_gatts_conn_can_alloc(void);

@@ -35,6 +35,9 @@ extern "C" {
 /* BLE encryption block definitions */
 #define BLE_ENC_BLOCK_SIZE       (16)
 
+/* 4 byte header + 251 byte payload. */
+#define BLE_ACL_MAX_PKT_SIZE     255
+
 struct ble_encryption_block
 {
     uint8_t     key[BLE_ENC_BLOCK_SIZE];
@@ -70,12 +73,29 @@ struct ble_mbuf_hdr_rxinfo
     /* XXX: we could just use single phy_mode field */
     int8_t  phy;
     uint8_t phy_mode;
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_PRIVACY)
+    int8_t  rpa_index;
+#endif
 #if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_EXT_ADV)
     void *user_data;
 #endif
 };
 
-/* Flag definitions for rxinfo  */
+/*
+ * Flag definitions for rxinfo
+ *
+ * Note: it's ok to have symbols with the same values as long as they cannot be
+ *       set for the same PDU (e.g. one use by scanner, other one used by
+ *       connection)
+ */
+#define BLE_MBUF_HDR_F_CONNECT_IND_TXD  (0x4000)
+#define BLE_MBUF_HDR_F_CONNECT_REQ_TXD  (0x4000)
+#define BLE_MBUF_HDR_F_CONNECT_RSP_RXD  (0x0008)
+#define BLE_MBUF_HDR_F_CONN_CREDIT      (0x8000)
+#define BLE_MBUF_HDR_F_IGNORED          (0x8000)
+#define BLE_MBUF_HDR_F_SCAN_REQ_TXD     (0x4000)
+#define BLE_MBUF_HDR_F_INITA_RESOLVED   (0x2000)
+#define BLE_MBUF_HDR_F_TARGETA_RESOLVED (0x2000)
 #define BLE_MBUF_HDR_F_EXT_ADV_SEC      (0x1000)
 #define BLE_MBUF_HDR_F_EXT_ADV          (0x0800)
 #define BLE_MBUF_HDR_F_RESOLVED         (0x0400)
@@ -85,16 +105,16 @@ struct ble_mbuf_hdr_rxinfo
 #define BLE_MBUF_HDR_F_DEVMATCH         (0x0040)
 #define BLE_MBUF_HDR_F_MIC_FAILURE      (0x0020)
 #define BLE_MBUF_HDR_F_SCAN_RSP_TXD     (0x0010)
-#define BLE_MBUF_HDR_F_SCAN_RSP_CHK     (0x0008)
+#define BLE_MBUF_HDR_F_SCAN_RSP_RXD     (0x0008)
 #define BLE_MBUF_HDR_F_RXSTATE_MASK     (0x0007)
 
 /* Transmit info. NOTE: no flags defined */
 struct ble_mbuf_hdr_txinfo
 {
     uint8_t flags;
-    uint8_t offset;
-    uint8_t pyld_len;
     uint8_t hdr_byte;
+    uint16_t offset;
+    uint16_t pyld_len;
 };
 
 struct ble_mbuf_hdr
@@ -107,6 +127,12 @@ struct ble_mbuf_hdr
     uint32_t rem_usecs;
 };
 
+#define BLE_MBUF_HDR_IGNORED(hdr) \
+    (!!((hdr)->rxinfo.flags & BLE_MBUF_HDR_F_IGNORED))
+
+#define BLE_MBUF_HDR_SCAN_REQ_TXD(hdr) \
+    (!!((hdr)->rxinfo.flags & BLE_MBUF_HDR_F_SCAN_REQ_TXD))
+
 #define BLE_MBUF_HDR_EXT_ADV_SEC(hdr) \
     (!!((hdr)->rxinfo.flags & BLE_MBUF_HDR_F_EXT_ADV_SEC))
 
@@ -116,8 +142,8 @@ struct ble_mbuf_hdr
 #define BLE_MBUF_HDR_DEVMATCH(hdr) \
     (!!((hdr)->rxinfo.flags & BLE_MBUF_HDR_F_DEVMATCH))
 
-#define BLE_MBUF_HDR_SCAN_RSP_RCV(hdr) \
-    (!!((hdr)->rxinfo.flags & BLE_MBUF_HDR_F_SCAN_RSP_CHK))
+#define BLE_MBUF_HDR_SCAN_RSP_RXD(hdr) \
+    (!!((hdr)->rxinfo.flags & BLE_MBUF_HDR_F_SCAN_RSP_RXD))
 
 #define BLE_MBUF_HDR_AUX_INVALID(hdr) \
     (!!((hdr)->rxinfo.flags & BLE_MBUF_HDR_F_AUX_INVALID))
@@ -133,6 +159,12 @@ struct ble_mbuf_hdr
 
 #define BLE_MBUF_HDR_RESOLVED(hdr)      \
     (!!((hdr)->rxinfo.flags & BLE_MBUF_HDR_F_RESOLVED))
+
+#define BLE_MBUF_HDR_INITA_RESOLVED(hdr)      \
+    (!!((hdr)->rxinfo.flags & BLE_MBUF_HDR_F_INITA_RESOLVED))
+
+#define BLE_MBUF_HDR_TARGETA_RESOLVED(hdr)      \
+    (!!((hdr)->rxinfo.flags & BLE_MBUF_HDR_F_TARGETA_RESOLVED))
 
 #define BLE_MBUF_HDR_RX_STATE(hdr)      \
     ((uint8_t)((hdr)->rxinfo.flags & BLE_MBUF_HDR_F_RXSTATE_MASK))
@@ -226,11 +258,11 @@ enum ble_error_codes
     BLE_ERR_COARSE_CLK_ADJ      = 0x40,
     BLE_ERR_TYPE0_SUBMAP_NDEF   = 0x41,
     BLE_ERR_UNK_ADV_INDENT      = 0x42,
-    BLE_RR_LIMIT_REACHED        = 0x43,
+    BLE_ERR_LIMIT_REACHED       = 0x43,
+    BLE_ERR_OPERATION_CANCELLED = 0x44,
+    BLE_ERR_PACKET_TOO_LONG     = 0x45,
     BLE_ERR_MAX                 = 0xff
 };
-
-int ble_err_from_os(int os_err);
 
 /* HW error codes */
 #define BLE_HW_ERR_DO_NOT_USE           (0) /* XXX: reserve this one for now */
@@ -253,9 +285,9 @@ int ble_err_from_os(int os_err);
 #define BLE_ADDR_IS_RPA(addr)     (((addr)->type == BLE_ADDR_RANDOM) && \
                                    ((addr)->val[5] & 0xc0) == 0x40)
 #define BLE_ADDR_IS_NRPA(addr)    (((addr)->type == BLE_ADDR_RANDOM) && \
-                                   (((addr)->val[5] & 0xc0) == 0x00)
+                                   ((addr)->val[5] & 0xc0) == 0x00)
 #define BLE_ADDR_IS_STATIC(addr)  (((addr)->type == BLE_ADDR_RANDOM) && \
-                                   (((addr)->val[5] & 0xc0) == 0xc0)
+                                   ((addr)->val[5] & 0xc0) == 0xc0)
 
 typedef struct {
     uint8_t type;

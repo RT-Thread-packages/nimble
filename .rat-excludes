@@ -14,6 +14,8 @@ pts-l2cap.txt
 pts-sm.txt
 94654-20170317-085122560.tpg
 94654-20170317-085441153.pts
+uncrustify.cfg
+.style_ignored_dirs
 
 # tinycrypt - BSD License.
 tinycrypt
@@ -26,3 +28,6 @@ queue.h
 
 # mbuf implementation - BSD License
 os_mbuf.c
+
+# Bluetooth Mesh badge sample - Apache 2.0 License
+mesh_badge

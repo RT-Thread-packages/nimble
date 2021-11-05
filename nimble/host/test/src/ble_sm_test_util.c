@@ -24,10 +24,17 @@
 #include "nimble/hci_common.h"
 #include "nimble/nimble_opt.h"
 #include "host/ble_sm.h"
-#include "host/ble_hs_test.h"
+#include "ble_hs_test.h"
 #include "host/ble_hs_id.h"
 #include "ble_hs_test_util.h"
 #include "ble_sm_test_util.h"
+
+#define BLE_HCI_LT_KEY_REQ_REPLY_LEN        (18)
+#define BLE_HCI_LT_KEY_REQ_NEG_REPLY_LEN    (2)
+#define BLE_HCI_LT_KEY_REQ_REPLY_ACK_PARAM_LEN (2) /* No status byte. */
+#define BLE_HCI_LT_KEY_REQ_NEG_REPLY_ACK_PARAM_LEN (2)
+#define BLE_HCI_LE_START_ENCRYPT_LEN        (28)
+#define BLE_HCI_ADD_TO_RESOLV_LIST_LEN      (39)
 
 int ble_sm_test_gap_event_type;
 int ble_sm_test_gap_status;
@@ -476,7 +483,7 @@ ble_sm_test_util_params_to_entity(struct ble_sm_test_params *params,
     }
 
     out_entity->id_addr_type =
-        ble_hs_misc_addr_type_to_id(out_entity->addr_type);
+        ble_hs_misc_own_addr_type_to_id(out_entity->addr_type);
 }
 
 static void
@@ -835,6 +842,35 @@ ble_sm_test_util_rx_public_key(uint16_t conn_handle,
     rc = ble_hs_test_util_l2cap_rx_first_frag(conn_handle, BLE_L2CAP_CID_SM,
                                               &hci_hdr, om);
     TEST_ASSERT_FATAL(rc == 0);
+}
+
+static void
+ble_sm_test_util_rx_public_key_bad(uint16_t conn_handle,
+                                   struct ble_sm_public_key *cmd)
+{
+    struct hci_data_hdr hci_hdr;
+    struct os_mbuf *om;
+    void *v;
+    int payload_len;
+    int rc;
+
+    hci_hdr = BLE_SM_TEST_UTIL_HCI_HDR(
+        2, BLE_HCI_PB_FIRST_FLUSH,
+        BLE_L2CAP_HDR_SZ + sizeof(struct ble_sm_hdr) + sizeof(struct ble_sm_public_key));
+
+    om = ble_hs_mbuf_l2cap_pkt();
+    TEST_ASSERT_FATAL(om != NULL);
+
+    payload_len = sizeof(struct ble_sm_hdr) + sizeof(struct ble_sm_public_key);
+
+    v = os_mbuf_extend(om, payload_len);
+    TEST_ASSERT_FATAL(v != NULL);
+
+    ble_sm_public_key_write(v, payload_len, cmd);
+
+    rc = ble_hs_test_util_l2cap_rx_first_frag(conn_handle, BLE_L2CAP_CID_SM,
+                                              &hci_hdr, om);
+    TEST_ASSERT_FATAL(rc != 0);
 }
 
 static void
@@ -1239,13 +1275,13 @@ ble_sm_test_util_verify_tx_pair_fail(
 static void
 ble_sm_test_util_rx_lt_key_req(uint16_t conn_handle, uint64_t r, uint16_t ediv)
 {
-    struct hci_le_lt_key_req evt;
+    struct ble_hci_ev_le_subev_lt_key_req evt;
     int rc;
 
-    evt.subevent_code = BLE_HCI_LE_SUBEV_LT_KEY_REQ;
-    evt.connection_handle = conn_handle;
-    evt.random_number = r;
-    evt.encrypted_diversifier = ediv;
+    evt.subev_code = BLE_HCI_LE_SUBEV_LT_KEY_REQ;
+    evt.conn_handle = htole16(conn_handle);
+    evt.rand = htole64(r);
+    evt.div = htole16(ediv);
 
     rc = ble_sm_ltk_req_rx(&evt);
     TEST_ASSERT_FATAL(rc == 0);
@@ -1307,11 +1343,11 @@ static void
 ble_sm_test_util_rx_enc_change(uint16_t conn_handle, uint8_t status,
                                      uint8_t encryption_enabled)
 {
-    struct hci_encrypt_change evt;
+    struct ble_hci_ev_enrypt_chg evt;
 
     evt.status = status;
-    evt.encryption_enabled = encryption_enabled;
-    evt.connection_handle = conn_handle;
+    evt.enabled = encryption_enabled;
+    evt.connection_handle = htole16(conn_handle);
 
     ble_sm_enc_change_rx(&evt);
 }
@@ -1634,7 +1670,7 @@ ble_sm_test_util_peer_bonding_good(int send_enc_req,
     /* Ensure the LTK request event got sent to the application. */
     TEST_ASSERT(ble_sm_test_store_obj_type == BLE_STORE_OBJ_TYPE_OUR_SEC);
     TEST_ASSERT(ble_sm_test_store_key.sec.peer_addr.type ==
-                ble_hs_misc_addr_type_to_id(peer_addr_type));
+                ble_hs_misc_peer_addr_type_to_id(peer_addr_type));
     TEST_ASSERT(ble_sm_test_store_key.sec.ediv_rand_present);
     TEST_ASSERT(ble_sm_test_store_key.sec.ediv == ediv);
     TEST_ASSERT(ble_sm_test_store_key.sec.rand_num == rand_num);
@@ -2237,7 +2273,7 @@ ble_sm_test_util_us_lgcy_good(struct ble_sm_test_params *params)
     ble_sm_test_util_bonding_all(params, 1);
 
     /* Verify programmatic unbonding. */
-    peer_addr.type = ble_hs_misc_addr_type_to_id(params->resp_addr_type);
+    peer_addr.type = ble_hs_misc_peer_addr_type_to_id(params->resp_addr_type);
     memcpy(peer_addr.val, params->resp_id_addr, sizeof peer_addr.val);
     rc = ble_store_util_delete_peer(&peer_addr);
     TEST_ASSERT(rc == 0);
@@ -2401,7 +2437,7 @@ ble_sm_test_util_peer_lgcy_good(struct ble_sm_test_params *params)
     ble_sm_test_util_repeat_pairing(params, 0);
 
     /* Verify programmatic unbonding. */
-    peer_addr.type = ble_hs_misc_addr_type_to_id(params->init_addr_type);
+    peer_addr.type = ble_hs_misc_peer_addr_type_to_id(params->init_addr_type);
     memcpy(peer_addr.val, params->init_id_addr, sizeof peer_addr.val);
     rc = ble_store_util_delete_peer(&peer_addr);
     TEST_ASSERT(rc == 0);
@@ -2561,6 +2597,52 @@ ble_sm_test_util_us_sc_good_once_no_init(
 }
 
 static void
+ble_sm_test_util_us_sc_bad_once_no_init(struct ble_sm_test_params *params,
+                                        struct ble_hs_conn *conn,
+                                        struct ble_sm_test_util_entity *our_entity,
+                                        struct ble_sm_test_util_entity *peer_entity)
+{
+    int rc;
+
+    TEST_ASSERT(!conn->bhc_sec_state.encrypted);
+    TEST_ASSERT(ble_sm_num_procs() == 0);
+
+    ble_hs_test_util_hci_ack_set(
+        ble_hs_hci_util_opcode_join(BLE_HCI_OGF_LE,
+                                    BLE_HCI_OCF_LE_START_ENCRYPT), 0);
+    if (params->sec_req.authreq != 0) {
+        ble_sm_test_util_rx_sec_req(2, &params->sec_req, 0);
+    } else {
+        /* Initiate the pairing procedure. */
+        rc = ble_gap_security_initiate(2);
+        TEST_ASSERT_FATAL(rc == 0);
+    }
+
+    /* Ensure we sent the expected pair request. */
+    ble_sm_test_util_verify_tx_pair_req(our_entity->pair_cmd);
+    TEST_ASSERT(!conn->bhc_sec_state.encrypted);
+    TEST_ASSERT(ble_sm_num_procs() == 1);
+    ble_sm_test_util_io_inject_bad(2, params->passkey_info.passkey.action);
+
+    /* Receive a pair response from the peer. */
+    ble_sm_test_util_rx_pair_rsp(2, peer_entity->pair_cmd, 0);
+    TEST_ASSERT(!conn->bhc_sec_state.encrypted);
+    TEST_ASSERT(ble_sm_num_procs() == 1);
+    ble_sm_test_util_io_inject_bad(2, params->passkey_info.passkey.action);
+
+    /* Ensure we sent the expected public key. */
+    ble_sm_test_util_verify_tx_public_key(our_entity->public_key);
+    TEST_ASSERT(!conn->bhc_sec_state.encrypted);
+    TEST_ASSERT(ble_sm_num_procs() == 1);
+    ble_sm_test_util_io_inject_bad(2, params->passkey_info.passkey.action);
+
+    /* Receive a wrong public key from the peer. */
+    ble_sm_test_util_rx_public_key_bad(2, peer_entity->public_key);
+    TEST_ASSERT(!conn->bhc_sec_state.encrypted);
+    TEST_ASSERT(ble_sm_num_procs() == 1);
+}
+
+static void
 ble_sm_test_util_us_sc_good_once(struct ble_sm_test_params *params)
 {
     struct ble_sm_test_util_entity peer_entity;
@@ -2572,6 +2654,17 @@ ble_sm_test_util_us_sc_good_once(struct ble_sm_test_params *params)
         params, conn, &our_entity, &peer_entity);
 }
 
+static void
+ble_sm_test_util_us_sc_bad_once(struct ble_sm_test_params *params)
+{
+    struct ble_sm_test_util_entity peer_entity;
+    struct ble_sm_test_util_entity our_entity;
+    struct ble_hs_conn *conn;
+
+    ble_sm_test_util_init_good(params, 1, &conn, &our_entity, &peer_entity);
+    ble_sm_test_util_us_sc_bad_once_no_init(
+        params, conn, &our_entity, &peer_entity);
+}
 void
 ble_sm_test_util_us_sc_good(struct ble_sm_test_params *params)
 {
@@ -2594,7 +2687,7 @@ ble_sm_test_util_us_sc_good(struct ble_sm_test_params *params)
     ble_sm_test_util_bonding_all(params, 1);
 
     /* Verify programmatic unbonding. */
-    peer_addr.type = ble_hs_misc_addr_type_to_id(params->resp_addr_type);
+    peer_addr.type = ble_hs_misc_peer_addr_type_to_id(params->resp_addr_type);
     memcpy(peer_addr.val, params->resp_id_addr, sizeof peer_addr.val);
     rc = ble_store_util_delete_peer(&peer_addr);
     TEST_ASSERT(rc == 0);
@@ -2603,12 +2696,22 @@ ble_sm_test_util_us_sc_good(struct ble_sm_test_params *params)
     TEST_ASSERT(ble_hs_test_util_num_peer_secs() == 0);
 }
 
+void
+ble_sm_test_util_us_sc_bad(struct ble_sm_test_params *params)
+{
+    /*** We are master. */
+
+    /* We initiate pairing. */
+    params->passkey_info.io_before_rx = 0;
+    params->sec_req.authreq = 0;
+    ble_sm_test_util_us_sc_bad_once(params);
+}
+
 static void
-ble_sm_test_util_peer_sc_good_once_no_init(
-    struct ble_sm_test_params *params,
-    struct ble_hs_conn *conn,
-    struct ble_sm_test_util_entity *our_entity,
-    struct ble_sm_test_util_entity *peer_entity)
+ble_sm_test_util_peer_sc_good_once_no_init(struct ble_sm_test_params *params,
+                                           struct ble_hs_conn *conn,
+                                           struct ble_sm_test_util_entity *our_entity,
+                                           struct ble_sm_test_util_entity *peer_entity)
 {
     int num_iters;
     int rc;
@@ -2815,7 +2918,7 @@ ble_sm_test_util_peer_sc_good(struct ble_sm_test_params *params)
     ble_sm_test_util_repeat_pairing(params, 1);
 
     /* Verify programmatic unbonding. */
-    peer_addr.type = ble_hs_misc_addr_type_to_id(params->init_addr_type);
+    peer_addr.type = ble_hs_misc_peer_addr_type_to_id(params->init_addr_type);
     memcpy(peer_addr.val, params->init_id_addr, sizeof peer_addr.val);
     rc = ble_store_util_delete_peer(&peer_addr);
     TEST_ASSERT(rc == 0);

@@ -21,7 +21,7 @@
 #include <errno.h>
 #include "testutil/testutil.h"
 #include "nimble/ble.h"
-#include "host/ble_hs_test.h"
+#include "ble_hs_test.h"
 #include "host/ble_gatt.h"
 #include "ble_hs_test_util.h"
 
@@ -365,7 +365,7 @@ ble_gatt_write_test_misc_reliable_good(
     }
 }
 
-TEST_CASE(ble_gatt_write_test_no_rsp)
+TEST_CASE_SELF(ble_gatt_write_test_no_rsp)
 {
     int attr_len;
     int rc;
@@ -384,9 +384,11 @@ TEST_CASE(ble_gatt_write_test_no_rsp)
 
     /* No response expected; verify callback not called. */
     TEST_ASSERT(!ble_gatt_write_test_cb_called);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_gatt_write_test_rsp)
+TEST_CASE_SELF(ble_gatt_write_test_rsp)
 {
     int attr_len;
 
@@ -410,9 +412,11 @@ TEST_CASE(ble_gatt_write_test_rsp)
 
     /* Verify callback got called. */
     TEST_ASSERT(ble_gatt_write_test_cb_called);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_gatt_write_test_long_good)
+TEST_CASE_SELF(ble_gatt_write_test_long_good)
 {
     /*** 1 prep write req/rsp. */
     ble_gatt_write_test_misc_long_good(
@@ -424,9 +428,11 @@ TEST_CASE(ble_gatt_write_test_long_good)
 
     /*** Maximum reqs/rsps. */
     ble_gatt_write_test_misc_long_good(BLE_ATT_ATTR_MAX_LEN);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_gatt_write_test_long_bad_handle)
+TEST_CASE_SELF(ble_gatt_write_test_long_bad_handle)
 {
     /*** 1 prep write req/rsp. */
     ble_gatt_write_test_misc_long_bad(
@@ -442,9 +448,11 @@ TEST_CASE(ble_gatt_write_test_long_bad_handle)
     ble_gatt_write_test_misc_long_bad(
         BLE_ATT_ATTR_MAX_LEN,
         ble_gatt_write_test_misc_long_fail_handle);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_gatt_write_test_long_bad_offset)
+TEST_CASE_SELF(ble_gatt_write_test_long_bad_offset)
 {
     /*** 1 prep write req/rsp. */
     ble_gatt_write_test_misc_long_bad(
@@ -460,9 +468,11 @@ TEST_CASE(ble_gatt_write_test_long_bad_offset)
     ble_gatt_write_test_misc_long_bad(
         BLE_ATT_ATTR_MAX_LEN,
         ble_gatt_write_test_misc_long_fail_offset);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_gatt_write_test_long_bad_value)
+TEST_CASE_SELF(ble_gatt_write_test_long_bad_value)
 {
     /*** 1 prep write req/rsp. */
     ble_gatt_write_test_misc_long_bad(
@@ -478,9 +488,11 @@ TEST_CASE(ble_gatt_write_test_long_bad_value)
     ble_gatt_write_test_misc_long_bad(
         BLE_ATT_ATTR_MAX_LEN,
         ble_gatt_write_test_misc_long_fail_value);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_gatt_write_test_long_bad_length)
+TEST_CASE_SELF(ble_gatt_write_test_long_bad_length)
 {
     /*** 1 prep write req/rsp. */
     ble_gatt_write_test_misc_long_bad(
@@ -496,9 +508,11 @@ TEST_CASE(ble_gatt_write_test_long_bad_length)
     ble_gatt_write_test_misc_long_bad(
         BLE_ATT_ATTR_MAX_LEN,
         ble_gatt_write_test_misc_long_fail_length);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_gatt_write_test_reliable_good)
+TEST_CASE_SELF(ble_gatt_write_test_reliable_good)
 {
     /*** 1 attribute. */
     ble_gatt_write_test_misc_reliable_good(
@@ -556,9 +570,11 @@ TEST_CASE(ble_gatt_write_test_reliable_good)
         }, {
             0
         } }));
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_gatt_write_test_long_queue_full)
+TEST_CASE_SELF(ble_gatt_write_test_long_queue_full)
 {
     int off;
     int len;
@@ -606,9 +622,11 @@ TEST_CASE(ble_gatt_write_test_long_queue_full)
 
     /* Verify clear queue command got sent. */
     ble_hs_test_util_verify_tx_exec_write(BLE_ATT_EXEC_WRITE_F_CANCEL);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_gatt_write_test_long_oom)
+TEST_CASE_SELF(ble_gatt_write_test_long_oom)
 {
     static const struct ble_hs_test_util_flat_attr attr = {
         .handle = 34,
@@ -698,9 +716,11 @@ TEST_CASE(ble_gatt_write_test_long_oom)
     /* Verify callback got called. */
     TEST_ASSERT(ble_gatt_write_test_cb_called);
     TEST_ASSERT(!ble_gattc_any_jobs());
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_gatt_write_test_reliable_oom)
+TEST_CASE_SELF(ble_gatt_write_test_reliable_oom)
 {
     static const struct ble_hs_test_util_flat_attr attr = {
         .handle = 34,
@@ -792,12 +812,12 @@ TEST_CASE(ble_gatt_write_test_reliable_oom)
     /* Verify callback got called. */
     TEST_ASSERT(ble_gatt_write_test_cb_called);
     TEST_ASSERT(!ble_gattc_any_jobs());
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
 TEST_SUITE(ble_gatt_write_test_suite)
 {
-    tu_suite_set_post_test_cb(ble_hs_test_util_post_test, NULL);
-
     ble_gatt_write_test_no_rsp();
     ble_gatt_write_test_rsp();
     ble_gatt_write_test_long_good();
@@ -809,12 +829,4 @@ TEST_SUITE(ble_gatt_write_test_suite)
     ble_gatt_write_test_reliable_good();
     ble_gatt_write_test_long_oom();
     ble_gatt_write_test_reliable_oom();
-}
-
-int
-ble_gatt_write_test_all(void)
-{
-    ble_gatt_write_test_suite();
-
-    return tu_any_failed;
 }

@@ -28,6 +28,7 @@
 #include "controller/ble_ll_ctrl.h"
 #include "controller/ble_ll_trace.h"
 #include "controller/ble_hw.h"
+#include "controller/ble_ll_sync.h"
 #include "ble_ll_conn_priv.h"
 
 /* To use spec sample data for testing */
@@ -105,7 +106,16 @@ const uint8_t g_ble_ll_ctrl_pkt_lengths[BLE_LL_CTRL_OPCODES] =
     BLE_LL_CTRL_PHY_REQ_LEN,
     BLE_LL_CTRL_PHY_RSP_LEN,
     BLE_LL_CTRL_PHY_UPD_IND_LEN,
-    BLE_LL_CTRL_MIN_USED_CHAN_LEN
+    BLE_LL_CTRL_MIN_USED_CHAN_LEN,
+    BLE_LL_CTRL_CTE_REQ_LEN,
+    BLE_LL_CTRL_CTE_RSP_LEN,
+    BLE_LL_CTRL_PERIODIC_SYNC_IND_LEN,
+    BLE_LL_CTRL_CLOCK_ACCURACY_REQ_LEN,
+    BLE_LL_CTRL_CLOCK_ACCURACY_RSP_LEN,
+    BLE_LL_CTRL_CIS_REQ_LEN,
+    BLE_LL_CTRL_CIS_RSP_LEN,
+    BLE_LL_CTRL_CIS_IND_LEN,
+    BLE_LL_CTRL_CIS_TERMINATE_LEN
 };
 
 /**
@@ -204,8 +214,14 @@ ble_ll_ctrl_len_proc(struct ble_ll_conn_sm *connsm, uint8_t *dptr)
         (ctrl_req.max_tx_time < BLE_LL_CONN_SUPP_TIME_MIN)) {
         rc = 1;
     } else {
-        /* Update the connection with the new parameters */
-        ble_ll_conn_datalen_update(connsm, &ctrl_req);
+        /* Update parameters */
+        connsm->rem_max_rx_time = ctrl_req.max_rx_time;
+        connsm->rem_max_tx_time = ctrl_req.max_tx_time;
+        connsm->rem_max_rx_octets = ctrl_req.max_rx_bytes;
+        connsm->rem_max_tx_octets = ctrl_req.max_tx_bytes;
+
+        /* Recalculate effective connection parameters */
+        ble_ll_conn_update_eff_data_len(connsm);
         rc = 0;
     }
 
@@ -494,6 +510,12 @@ ble_ll_ctrl_proc_unk_rsp(struct ble_ll_conn_sm *connsm, uint8_t *dptr, uint8_t *
         ctrl_proc = BLE_LL_CTRL_PROC_PHY_UPDATE;
         break;
 #endif
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_SCA_UPDATE)
+    case BLE_LL_CTRL_CLOCK_ACCURACY_REQ:
+        ble_ll_hci_ev_sca_update(connsm, BLE_ERR_UNSUPPORTED, 0);
+        ctrl_proc = BLE_LL_CTRL_PROC_SCA_UPDATE;
+        break;
+#endif
     default:
         ctrl_proc = BLE_LL_CTRL_PROC_NUM;
         break;
@@ -547,47 +569,6 @@ ble_ll_ctrl_start_rsp_timer(struct ble_ll_conn_sm *connsm)
                      ble_npl_time_ms_to_ticks32(BLE_LL_CTRL_PROC_TIMEOUT_MS));
 }
 
-#if (BLE_LL_BT5_PHY_SUPPORTED == 1)
-void
-ble_ll_ctrl_phy_update_proc_complete(struct ble_ll_conn_sm *connsm)
-{
-    int chk_proc_stop;
-    int chk_host_phy;
-
-    chk_proc_stop = 1;
-    chk_host_phy = 1;
-
-    connsm->phy_tx_transition = BLE_PHY_TRANSITION_INVALID;
-
-    if (CONN_F_PEER_PHY_UPDATE(connsm)) {
-        CONN_F_PEER_PHY_UPDATE(connsm) = 0;
-    } else if (CONN_F_CTRLR_PHY_UPDATE(connsm)) {
-        CONN_F_CTRLR_PHY_UPDATE(connsm) = 0;
-    } else {
-        /* Must be a host-initiated update */
-        CONN_F_HOST_PHY_UPDATE(connsm) = 0;
-        chk_host_phy = 0;
-        if (CONN_F_PHY_UPDATE_EVENT(connsm) == 0) {
-            ble_ll_hci_ev_phy_update(connsm, BLE_ERR_SUCCESS);
-        }
-    }
-
-    /* Must check if we need to start host procedure */
-    if (chk_host_phy) {
-        if (CONN_F_HOST_PHY_UPDATE(connsm)) {
-            if (ble_ll_conn_chk_phy_upd_start(connsm)) {
-                CONN_F_HOST_PHY_UPDATE(connsm) = 0;
-            } else {
-                chk_proc_stop = 0;
-            }
-        }
-    }
-
-    if (chk_proc_stop) {
-        ble_ll_ctrl_proc_stop(connsm, BLE_LL_CTRL_PROC_PHY_UPDATE);
-    }
-}
-
 /**
  * Convert a phy mask to a numeric phy value.
  *
@@ -602,7 +583,7 @@ ble_ll_ctrl_phy_update_proc_complete(struct ble_ll_conn_sm *connsm)
  * BLE_HCI_LE_PHY_2M                    (2)
  * BLE_HCI_LE_PHY_CODED                 (3)
  */
-static uint8_t
+uint8_t
 ble_ll_ctrl_phy_from_phy_mask(uint8_t phy_mask)
 {
     uint8_t phy;
@@ -636,6 +617,66 @@ ble_ll_ctrl_phy_from_phy_mask(uint8_t phy_mask)
     }
 
     return phy;
+}
+
+#if (BLE_LL_BT5_PHY_SUPPORTED == 1)
+uint8_t
+ble_ll_ctrl_phy_tx_transition_get(uint8_t phy_mask)
+{
+    /*
+     * Evaluate PHYs in transition starting from the one with longest TX time
+     * so we select the one that allows shortest payload to be sent. This is
+     * to make sure we do not violate timing restriction on new PHY.
+     */
+    if (phy_mask & BLE_PHY_MASK_CODED) {
+        return BLE_PHY_CODED;
+    } else if (phy_mask & BLE_PHY_MASK_1M) {
+        return BLE_PHY_1M;
+    } else if (phy_mask & BLE_PHY_MASK_2M) {
+        return BLE_PHY_2M;
+    }
+
+    return 0;
+}
+
+void
+ble_ll_ctrl_phy_update_proc_complete(struct ble_ll_conn_sm *connsm)
+{
+    int chk_proc_stop;
+    int chk_host_phy;
+
+    chk_proc_stop = 1;
+    chk_host_phy = 1;
+
+    connsm->phy_tx_transition = 0;
+
+    if (CONN_F_PEER_PHY_UPDATE(connsm)) {
+        CONN_F_PEER_PHY_UPDATE(connsm) = 0;
+    } else if (CONN_F_CTRLR_PHY_UPDATE(connsm)) {
+        CONN_F_CTRLR_PHY_UPDATE(connsm) = 0;
+    } else {
+        /* Must be a host-initiated update */
+        CONN_F_HOST_PHY_UPDATE(connsm) = 0;
+        chk_host_phy = 0;
+        if (CONN_F_PHY_UPDATE_EVENT(connsm) == 0) {
+            ble_ll_hci_ev_phy_update(connsm, BLE_ERR_SUCCESS);
+        }
+    }
+
+    /* Must check if we need to start host procedure */
+    if (chk_host_phy) {
+        if (CONN_F_HOST_PHY_UPDATE(connsm)) {
+            if (ble_ll_conn_chk_phy_upd_start(connsm)) {
+                CONN_F_HOST_PHY_UPDATE(connsm) = 0;
+            } else {
+                chk_proc_stop = 0;
+            }
+        }
+    }
+
+    if (chk_proc_stop) {
+        ble_ll_ctrl_proc_stop(connsm, BLE_LL_CTRL_PROC_PHY_UPDATE);
+    }
 }
 
 /**
@@ -686,10 +727,17 @@ ble_ll_ctrl_phy_update_ind_make(struct ble_ll_conn_sm *connsm, uint8_t *dptr,
     uint8_t tx_phys;
     uint8_t rx_phys;
     uint16_t instant;
+    uint8_t is_slave_sym = 0;
 
     /* Get preferences from PDU */
     tx_phys = dptr[0];
     rx_phys = dptr[1];
+
+    /* If we are master, check if slave requested symmetric PHY */
+    if (connsm->conn_role == BLE_LL_CONN_ROLE_MASTER) {
+        is_slave_sym = tx_phys == rx_phys;
+        is_slave_sym &= __builtin_popcount(tx_phys) == 1;
+    }
 
     /* Get m_to_s and s_to_m masks */
     if (slave_req) {
@@ -700,13 +748,34 @@ ble_ll_ctrl_phy_update_ind_make(struct ble_ll_conn_sm *connsm, uint8_t *dptr,
         s_to_m = connsm->phy_data.req_pref_rx_phys_mask & tx_phys;
     }
 
-    /* Find new phys. If not different than current, set to 0 */
+    if (is_slave_sym) {
+        /*
+         * If either s_to_m or m_to_s is 0, it means for at least one direction
+         * requested PHY is not our preferred one so make sure we keep current
+         * PHY in both directions
+         *
+         * Core 5.2, Vol 6, PartB, 5.1.10
+         *     If the slave specified a single PHY in both the TX_PHYS and
+         *     RX_PHYS fields and both fields are the same, the master shall
+         *     either select the PHY specified by the slave for both directions
+         *     or shall leave both directions unchanged.
+         */
+        if ((s_to_m == 0) || (m_to_s == 0)) {
+            s_to_m = 0;
+            m_to_s = 0;
+        } else {
+            BLE_LL_ASSERT(s_to_m == m_to_s);
+        }
+    }
+
+    /* Calculate new PHYs to use */
     m_to_s = ble_ll_ctrl_find_new_phy(m_to_s);
+    s_to_m = ble_ll_ctrl_find_new_phy(s_to_m);
+
+    /* Make sure we do not indicate PHY change if the same as current one */
     if (m_to_s == connsm->phy_data.cur_tx_phy) {
         m_to_s = 0;
     }
-
-    s_to_m = ble_ll_ctrl_find_new_phy(s_to_m);
     if (s_to_m == connsm->phy_data.cur_rx_phy) {
         s_to_m = 0;
     }
@@ -777,6 +846,20 @@ ble_ll_ctrl_phy_req_rsp_make(struct ble_ll_conn_sm *connsm, uint8_t *ctrdata)
     }
 }
 
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_SCA_UPDATE)
+/**
+ * Create a LL_CLOCK_ACCURACY_REQ or LL_CLOCK_ACCURACY_RSP pdu
+ *
+ * @param connsm Pointer to connection state machine
+ * @param ctrdata: Pointer to where CtrData starts in pdu
+ */
+static void
+ble_ll_ctrl_sca_req_rsp_make(struct ble_ll_conn_sm *connsm, uint8_t *ctrdata)
+{
+    ctrdata[0] = BLE_LL_SCA_ENUM;
+}
+#endif
+
 static uint8_t
 ble_ll_ctrl_rx_phy_req(struct ble_ll_conn_sm *connsm, uint8_t *req,
                        uint8_t *rsp)
@@ -830,13 +913,7 @@ ble_ll_ctrl_rx_phy_req(struct ble_ll_conn_sm *connsm, uint8_t *req,
         ble_ll_ctrl_phy_req_rsp_make(connsm, rsp);
         rsp_opcode = BLE_LL_CTRL_PHY_RSP;
 
-        if (rsp[0] & BLE_PHY_MASK_1M) {
-            connsm->phy_tx_transition = BLE_PHY_1M;
-        } else if (rsp[0] & BLE_PHY_MASK_2M) {
-            connsm->phy_tx_transition = BLE_PHY_2M;
-        } else if (rsp[0] & BLE_PHY_MASK_CODED) {
-            connsm->phy_tx_transition = BLE_PHY_CODED;
-        }
+        connsm->phy_tx_transition = ble_ll_ctrl_phy_tx_transition_get(req[1] | rsp[0]);
 
         /* Start response timer */
         connsm->cur_ctrl_proc = BLE_LL_CTRL_PROC_PHY_UPDATE;
@@ -970,6 +1047,87 @@ ble_ll_ctrl_rx_phy_update_ind(struct ble_ll_conn_sm *connsm, uint8_t *dptr)
 }
 #endif
 
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_PERIODIC_ADV_SYNC_TRANSFER)
+/**
+ * Called when a BLE_LL_CTRL_PERIODIC_SYNC_IND PDU is received
+ *
+ * @param connsm
+ * @param dptr
+ *
+ * @return uint8_t
+ */
+static uint8_t
+ble_ll_ctrl_rx_periodic_sync_ind(struct ble_ll_conn_sm *connsm, uint8_t *dptr)
+{
+    if (connsm->sync_transfer_mode) {
+        ble_ll_sync_periodic_ind(connsm, dptr, connsm->sync_transfer_mode == 1,
+                                 connsm->sync_transfer_skip,
+                                 connsm->sync_transfer_sync_timeout);
+    }
+    return BLE_ERR_MAX;
+}
+#endif
+
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_SCA_UPDATE)
+/**
+ * Called when a BLE_LL_CTRL_CLOCK_ACCURACY_REQ PDU is received
+ *
+ * @param connsm
+ * @param dptr
+ * @param rsp Pointer to CtrData of BLE_LL_CTRL_CLOCK_ACCURACY_RSP.
+ *
+ * @return uint8_t
+ */
+static uint8_t
+ble_ll_ctrl_rx_sca_req(struct ble_ll_conn_sm *connsm, uint8_t *dptr,
+                       uint8_t *rsp)
+{
+    ble_ll_ctrl_sca_req_rsp_make(connsm, rsp);
+    return BLE_LL_CTRL_CLOCK_ACCURACY_RSP;
+}
+
+/**
+ * Called when a BLE_LL_CTRL_CLOCK_ACCURACY_RSP PDU is received
+ *
+ * @param connsm
+ * @param dptr
+ *
+ * @return uint8_t
+ */
+static uint8_t
+ble_ll_ctrl_rx_sca_rsp(struct ble_ll_conn_sm *connsm, uint8_t *dptr)
+{
+    if (connsm->cur_ctrl_proc != BLE_LL_CTRL_PROC_SCA_UPDATE) {
+        return BLE_LL_CTRL_UNKNOWN_RSP;
+    }
+    ble_ll_ctrl_proc_stop(connsm, BLE_LL_CTRL_PROC_SCA_UPDATE);
+    ble_ll_hci_ev_sca_update(connsm, BLE_ERR_SUCCESS, dptr[0]);
+    return BLE_ERR_MAX;
+}
+
+#endif
+
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_ISO)
+static uint8_t
+ble_ll_ctrl_rx_cis_req(struct ble_ll_conn_sm *connsm, uint8_t *dptr,
+                       uint8_t *rspdata)
+{
+    return BLE_LL_CTRL_UNKNOWN_RSP;
+}
+
+static uint8_t
+ble_ll_ctrl_rx_cis_rsp(struct ble_ll_conn_sm *connsm, uint8_t *dptr,
+                       uint8_t *rspdata)
+{
+    return BLE_LL_CTRL_UNKNOWN_RSP;
+}
+
+static uint8_t
+ble_ll_ctrl_rx_cis_ind(struct ble_ll_conn_sm *connsm, uint8_t *dptr)
+{
+    return BLE_LL_CTRL_UNKNOWN_RSP;
+}
+#endif
 /**
  * Create a link layer length request or length response PDU.
  *
@@ -988,7 +1146,7 @@ ble_ll_ctrl_datalen_upd_make(struct ble_ll_conn_sm *connsm, uint8_t *dptr)
     put_le16(dptr + 7, connsm->max_tx_time);
 }
 
-#if (MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_ENCRYPTION) == 1)
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_ENCRYPTION)
 void
 ble_ll_calc_session_key(struct ble_ll_conn_sm *connsm)
 {
@@ -1160,9 +1318,13 @@ ble_ll_ctrl_start_enc_send(struct ble_ll_conn_sm *connsm)
         om->om_data[0] = BLE_LL_CTRL_START_ENC_REQ;
         ble_ll_conn_enqueue_pkt(connsm, om, BLE_LL_LLID_CTRL, 1);
 
-        /* Wait for LL_START_ENC_RSP */
-        connsm->cur_ctrl_proc = BLE_LL_CTRL_PROC_ENCRYPT;
-        ble_ll_ctrl_start_rsp_timer(connsm);
+        /* Wait for LL_START_ENC_RSP. If there is already procedure in progress,
+         * LL response timer is already running.
+         */
+        if (connsm->cur_ctrl_proc == BLE_LL_CTRL_PROC_IDLE) {
+            connsm->cur_ctrl_proc = BLE_LL_CTRL_PROC_ENCRYPT;
+            ble_ll_ctrl_start_rsp_timer(connsm);
+        }
 
         rc = 0;
     } else {
@@ -1170,6 +1332,15 @@ ble_ll_ctrl_start_enc_send(struct ble_ll_conn_sm *connsm)
     }
     return rc;
 }
+
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_ISO)
+static void
+ble_ll_ctrl_cis_create(struct ble_ll_conn_sm *connsm, uint8_t *dptr)
+{
+    /* TODO Implement */
+    return;
+}
+#endif
 
 /**
  * Create a link layer control "encrypt request" PDU.
@@ -1272,6 +1443,8 @@ ble_ll_ctrl_rx_enc_req(struct ble_ll_conn_sm *connsm, uint8_t *dptr,
         return BLE_LL_CTRL_UNKNOWN_RSP;
     }
 
+    connsm->enc_data.enc_state = CONN_ENC_S_ENC_RSP_TO_BE_SENT;
+
     /* In case we were already encrypted we need to reset packet counters */
     connsm->enc_data.rx_pkt_cntr = 0;
     connsm->enc_data.tx_pkt_cntr = 0;
@@ -1359,6 +1532,12 @@ ble_ll_ctrl_rx_pause_enc_rsp(struct ble_ll_conn_sm *connsm)
 
     if (connsm->conn_role == BLE_LL_CONN_ROLE_MASTER) {
         rc = BLE_LL_CTRL_PAUSE_ENC_RSP;
+    } else if (connsm->enc_data.enc_state == CONN_ENC_S_PAUSE_ENC_RSP_WAIT) {
+        /* Master sends back unencrypted LL_PAUSE_ENC_RSP.
+         * From this moment encryption is paused.
+         */
+        rc = BLE_ERR_MAX;
+        connsm->enc_data.enc_state = CONN_ENC_S_PAUSED;
     } else {
         rc = BLE_LL_CTRL_UNKNOWN_RSP;
     }
@@ -1385,19 +1564,25 @@ ble_ll_ctrl_rx_start_enc_rsp(struct ble_ll_conn_sm *connsm)
         return BLE_ERR_MAX;
     }
 
-    ble_ll_ctrl_proc_stop(connsm, BLE_LL_CTRL_PROC_ENCRYPT);
-
     /* If master, we are done. Stop control procedure and sent event to host */
     if (connsm->conn_role == BLE_LL_CONN_ROLE_MASTER) {
+
+        ble_ll_ctrl_proc_stop(connsm, BLE_LL_CTRL_PROC_ENCRYPT);
+
         /* We are encrypted */
         connsm->enc_data.enc_state = CONN_ENC_S_ENCRYPTED;
-#if (MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_PING) == 1)
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_PING)
         ble_ll_conn_auth_pyld_timer_start(connsm);
 #endif
         rc = BLE_ERR_MAX;
     } else {
         /* Procedure has completed but slave needs to send START_ENC_RSP */
         rc = BLE_LL_CTRL_START_ENC_RSP;
+
+        /* Stop timer if it was started when sending START_ENC_REQ */
+        if (connsm->cur_ctrl_proc == BLE_LL_CTRL_PROC_ENCRYPT) {
+            ble_ll_ctrl_proc_stop(connsm, BLE_LL_CTRL_PROC_ENCRYPT);
+        }
     }
 
     /*
@@ -1470,7 +1655,7 @@ ble_ll_ctrl_version_ind_make(struct ble_ll_conn_sm *connsm, uint8_t *pyld)
     connsm->csmflags.cfbit.version_ind_sent = 1;
 
     /* Fill out response */
-    pyld[0] = BLE_HCI_VER_BCS_5_0;
+    pyld[0] = BLE_HCI_VER_BCS;
     put_le16(pyld + 1, MYNEWT_VAL(BLE_LL_MFRG_ID));
     put_le16(pyld + 3, BLE_LL_SUB_VERS_NR);
 }
@@ -1563,7 +1748,7 @@ ble_ll_ctrl_rx_reject_ind(struct ble_ll_conn_sm *connsm, uint8_t *dptr,
             }
         }
         break;
-#if (MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_ENCRYPTION) == 1)
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_ENCRYPTION)
     case BLE_LL_CTRL_PROC_ENCRYPT:
         ble_ll_ctrl_proc_stop(connsm, BLE_LL_CTRL_PROC_ENCRYPT);
         ble_ll_hci_ev_encrypt_chg(connsm, ble_error);
@@ -1583,6 +1768,12 @@ ble_ll_ctrl_rx_reject_ind(struct ble_ll_conn_sm *connsm, uint8_t *dptr,
          */
         ble_ll_ctrl_proc_stop(connsm, BLE_LL_CTRL_PROC_DATA_LEN_UPD);
         break;
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_SCA_UPDATE)
+    case BLE_LL_CTRL_PROC_SCA_UPDATE:
+        ble_ll_hci_ev_sca_update(connsm, ble_error, 0);
+        ble_ll_ctrl_proc_stop(connsm, BLE_LL_CTRL_PROC_SCA_UPDATE);
+        break;
+#endif
     default:
         break;
     }
@@ -1670,6 +1861,38 @@ ble_ll_ctrl_initiate_dle(struct ble_ll_conn_sm *connsm)
     ble_ll_ctrl_proc_start(connsm, BLE_LL_CTRL_PROC_DATA_LEN_UPD);
 }
 
+static void
+ble_ll_ctrl_update_features(struct ble_ll_conn_sm *connsm, uint8_t *feat)
+{
+    connsm->conn_features = feat[0];
+    memcpy(connsm->remote_features, feat + 1, 7);
+
+    /* If we received peer's features for the 1st time, we should try DLE */
+    if (!connsm->csmflags.cfbit.rxd_features) {
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_CODED_PHY)
+        /*
+         * If connection was established on uncoded PHY, by default we use
+         * MaxTxTime and MaxRxTime applicable for that PHY since we are not
+         * allowed to indicate longer supported time if peer does not support
+         * LE Coded PHY. However, once we know that peer does support it we can
+         * update those values to ones applicable for coded PHY.
+         */
+        if (connsm->remote_features[0] & (BLE_LL_FEAT_LE_CODED_PHY >> 8)) {
+            if (connsm->host_req_max_tx_time) {
+                connsm->max_tx_time = max(connsm->max_tx_time,
+                                          connsm->host_req_max_tx_time);
+            } else {
+                connsm->max_tx_time = g_ble_ll_conn_params.conn_init_max_tx_time_coded;
+            }
+            connsm->max_rx_time = BLE_LL_CONN_SUPP_TIME_MAX_CODED;
+        }
+#endif
+
+        connsm->csmflags.cfbit.pending_initiate_dle = 1;
+        connsm->csmflags.cfbit.rxd_features = 1;
+    }
+}
+
 /**
  * Called when we receive a feature request or a slave initiated feature
  * request.
@@ -1679,6 +1902,7 @@ ble_ll_ctrl_initiate_dle(struct ble_ll_conn_sm *connsm)
  * @param dptr
  * @param rspbuf
  * @param opcode
+ * @param new_features
  *
  * @return int
  */
@@ -1687,7 +1911,7 @@ ble_ll_ctrl_rx_feature_req(struct ble_ll_conn_sm *connsm, uint8_t *dptr,
                            uint8_t *rspbuf, uint8_t opcode)
 {
     uint8_t rsp_opcode;
-    uint32_t our_feat;
+    uint64_t our_feat;
 
     /*
      * Only accept slave feature requests if we are a master and feature
@@ -1708,6 +1932,8 @@ ble_ll_ctrl_rx_feature_req(struct ble_ll_conn_sm *connsm, uint8_t *dptr,
 
     rsp_opcode = BLE_LL_CTRL_FEATURE_RSP;
 
+    ble_ll_ctrl_update_features(connsm, dptr);
+
     /*
      * 1st octet of features should be common features of local and remote
      * controller - we call this 'connection features'
@@ -1716,19 +1942,37 @@ ble_ll_ctrl_rx_feature_req(struct ble_ll_conn_sm *connsm, uint8_t *dptr,
      *
      * See: Vol 6, Part B, section 2.4.2.10
      */
+    connsm->conn_features &= our_feat;
 
-    connsm->conn_features = dptr[0] & our_feat;
-    memset(rspbuf + 1, 0, 8);
-    put_le32(rspbuf + 1, our_feat);
+    put_le64(rspbuf + 1, our_feat);
     rspbuf[1] = connsm->conn_features;
 
-    /* If this is the first time we received remote features, try to start DLE */
-    if (!connsm->csmflags.cfbit.rxd_features) {
-        ble_ll_ctrl_initiate_dle(connsm);
-        connsm->csmflags.cfbit.rxd_features = 1;
+    return rsp_opcode;
+}
+
+/**
+ * Called when we receive a feature response
+ *
+ * @param connsm
+ * @param dptr
+ * @param new_features
+ *
+ */
+static void
+ble_ll_ctrl_rx_feature_rsp(struct ble_ll_conn_sm *connsm, uint8_t *dptr)
+{
+    ble_ll_ctrl_update_features(connsm, dptr);
+
+    /* Stop the control procedure */
+    if (IS_PENDING_CTRL_PROC(connsm, BLE_LL_CTRL_PROC_FEATURE_XCHG)) {
+        ble_ll_ctrl_proc_stop(connsm, BLE_LL_CTRL_PROC_FEATURE_XCHG);
     }
 
-    return rsp_opcode;
+    /* Send event to host if pending features read */
+    if (connsm->csmflags.cfbit.pending_hci_rd_features) {
+        ble_ll_hci_ev_rd_rem_used_feat(connsm, BLE_ERR_SUCCESS);
+        connsm->csmflags.cfbit.pending_hci_rd_features = 0;
+    }
 }
 
 /**
@@ -1954,8 +2198,7 @@ ble_ll_ctrl_proc_init(struct ble_ll_conn_sm *connsm, int ctrl_proc)
             } else {
                 opcode = BLE_LL_CTRL_SLAVE_FEATURE_REQ;
             }
-            memset(ctrdata, 0, BLE_LL_CTRL_FEATURE_LEN);
-            put_le32(ctrdata, ble_ll_read_supp_features());
+            put_le64(ctrdata, ble_ll_read_supp_features());
             break;
         case BLE_LL_CTRL_PROC_VERSION_XCHG:
             opcode = BLE_LL_CTRL_VERSION_IND;
@@ -1976,7 +2219,7 @@ ble_ll_ctrl_proc_init(struct ble_ll_conn_sm *connsm, int ctrl_proc)
             opcode = BLE_LL_CTRL_LENGTH_REQ;
             ble_ll_ctrl_datalen_upd_make(connsm, dptr);
             break;
-#if (MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_ENCRYPTION) == 1)
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_ENCRYPTION)
         /* XXX: deal with already encrypted connection.*/
         case BLE_LL_CTRL_PROC_ENCRYPT:
             /* If we are already encrypted we do pause procedure */
@@ -1992,6 +2235,18 @@ ble_ll_ctrl_proc_init(struct ble_ll_conn_sm *connsm, int ctrl_proc)
         case BLE_LL_CTRL_PROC_PHY_UPDATE:
             opcode = BLE_LL_CTRL_PHY_REQ;
             ble_ll_ctrl_phy_req_rsp_make(connsm, ctrdata);
+            break;
+#endif
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_SCA_UPDATE)
+        case BLE_LL_CTRL_PROC_SCA_UPDATE:
+            opcode = BLE_LL_CTRL_CLOCK_ACCURACY_REQ;
+            ble_ll_ctrl_sca_req_rsp_make(connsm, ctrdata);
+            break;
+#endif
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_ISO)
+        case BLE_LL_CTRL_PROC_CIS_CREATE:
+            opcode = BLE_LL_CTRL_CIS_REQ;
+            ble_ll_ctrl_cis_create(connsm, ctrdata);
             break;
 #endif
         default:
@@ -2199,7 +2454,7 @@ ble_ll_ctrl_rx_pdu(struct ble_ll_conn_sm *connsm, struct os_mbuf *om)
     uint8_t *dptr;
     uint8_t *rspbuf;
     uint8_t *rspdata;
-#if (MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_ENCRYPTION) == 1)
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_ENCRYPTION)
     int restart_encryption;
 #endif
     int rc = 0;
@@ -2217,6 +2472,11 @@ ble_ll_ctrl_rx_pdu(struct ble_ll_conn_sm *connsm, struct os_mbuf *om)
     dptr = om->om_data;
     len = dptr[1];
     opcode = dptr[2];
+
+#if MYNEWT_VAL(BLE_LL_HCI_LLCP_TRACE)
+    ble_ll_hci_ev_send_llcp_trace(0x03, connsm->conn_handle, connsm->event_cntr,
+                                  &dptr[2], len);
+#endif
 
     /*
      * rspbuf points to first byte of response. The response buffer does not
@@ -2239,7 +2499,7 @@ ble_ll_ctrl_rx_pdu(struct ble_ll_conn_sm *connsm, struct os_mbuf *om)
 
     ble_ll_trace_u32x2(BLE_LL_TRACE_ID_CTRL_RX, opcode, len);
 
-#if (MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_ENCRYPTION) == 1)
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_ENCRYPTION)
     restart_encryption = 0;
 #endif
 
@@ -2278,6 +2538,9 @@ ble_ll_ctrl_rx_pdu(struct ble_ll_conn_sm *connsm, struct os_mbuf *om)
         break;
     case BLE_LL_CTRL_MIN_USED_CHAN_IND:
         feature = BLE_LL_FEAT_MIN_USED_CHAN;
+        break;
+    case BLE_LL_CTRL_PERIODIC_SYNC_IND:
+        feature = BLE_LL_FEAT_SYNC_TRANS_RECV;
         break;
     default:
         feature = 0;
@@ -2360,22 +2623,7 @@ ble_ll_ctrl_rx_pdu(struct ble_ll_conn_sm *connsm, struct os_mbuf *om)
         break;
     /* XXX: check to see if ctrl procedure was running? Do we care? */
     case BLE_LL_CTRL_FEATURE_RSP:
-        connsm->conn_features = dptr[0];
-        memcpy(connsm->remote_features, dptr + 1, 7);
-        /* If this is the first time we received remote features, try to start DLE */
-        if (!connsm->csmflags.cfbit.rxd_features) {
-            ble_ll_ctrl_initiate_dle(connsm);
-            connsm->csmflags.cfbit.rxd_features = 1;
-        }
-        /* Stop the control procedure */
-        if (IS_PENDING_CTRL_PROC(connsm, BLE_LL_CTRL_PROC_FEATURE_XCHG)) {
-            ble_ll_ctrl_proc_stop(connsm, BLE_LL_CTRL_PROC_FEATURE_XCHG);
-        }
-        /* Send event to host if pending features read */
-        if (connsm->csmflags.cfbit.pending_hci_rd_features) {
-            ble_ll_hci_ev_rd_rem_used_feat(connsm, BLE_ERR_SUCCESS);
-            connsm->csmflags.cfbit.pending_hci_rd_features = 0;
-        }
+        ble_ll_ctrl_rx_feature_rsp(connsm, dptr);
         break;
     case BLE_LL_CTRL_VERSION_IND:
         rsp_opcode = ble_ll_ctrl_rx_version_ind(connsm, dptr, rspdata);
@@ -2383,7 +2631,7 @@ ble_ll_ctrl_rx_pdu(struct ble_ll_conn_sm *connsm, struct os_mbuf *om)
     case BLE_LL_CTRL_SLAVE_FEATURE_REQ:
         rsp_opcode = ble_ll_ctrl_rx_feature_req(connsm, dptr, rspbuf, opcode);
         break;
-#if (MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_ENCRYPTION) == 1)
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_ENCRYPTION)
     case BLE_LL_CTRL_ENC_REQ:
         rsp_opcode = ble_ll_ctrl_rx_enc_req(connsm, dptr, rspdata);
         break;
@@ -2435,6 +2683,31 @@ ble_ll_ctrl_rx_pdu(struct ble_ll_conn_sm *connsm, struct os_mbuf *om)
         rsp_opcode = ble_ll_ctrl_rx_phy_update_ind(connsm, dptr);
         break;
 #endif
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_SCA_UPDATE)
+    case BLE_LL_CTRL_CLOCK_ACCURACY_REQ:
+        rsp_opcode = ble_ll_ctrl_rx_sca_req(connsm, dptr, rspdata);
+        break;
+    case BLE_LL_CTRL_CLOCK_ACCURACY_RSP:
+        rsp_opcode = ble_ll_ctrl_rx_sca_rsp(connsm, dptr);
+        break;
+#endif
+
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_ISO)
+    case BLE_LL_CTRL_CIS_REQ:
+        rsp_opcode = ble_ll_ctrl_rx_cis_req(connsm, dptr, rspdata);
+        break;
+    case BLE_LL_CTRL_CIS_RSP:
+        rsp_opcode = ble_ll_ctrl_rx_cis_rsp(connsm, dptr, rspdata);
+        break;
+    case BLE_LL_CTRL_CIS_IND:
+        rsp_opcode = ble_ll_ctrl_rx_cis_ind(connsm, dptr);
+        break;
+#endif
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_PERIODIC_ADV_SYNC_TRANSFER)
+    case BLE_LL_CTRL_PERIODIC_SYNC_IND:
+        rsp_opcode = ble_ll_ctrl_rx_periodic_sync_ind(connsm, dptr);
+        break;
+#endif
     default:
         /* Nothing to do here */
         break;
@@ -2455,7 +2728,7 @@ ll_ctrl_send_rsp:
         }
         len = g_ble_ll_ctrl_pkt_lengths[rsp_opcode] + 1;
         ble_ll_conn_enqueue_pkt(connsm, om, BLE_LL_LLID_CTRL, len);
-#if (MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_ENCRYPTION) == 1)
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_ENCRYPTION)
         if (restart_encryption) {
             /* XXX: what happens if this fails? Meaning we cant allocate
                mbuf? */
@@ -2463,6 +2736,12 @@ ll_ctrl_send_rsp:
         }
 #endif
     }
+
+    if (connsm->csmflags.cfbit.pending_initiate_dle) {
+        connsm->csmflags.cfbit.pending_initiate_dle = 0;
+        ble_ll_ctrl_initiate_dle(connsm);
+    }
+
     return rc;
 }
 
@@ -2528,6 +2807,11 @@ ble_ll_ctrl_tx_done(struct os_mbuf *txpdu, struct ble_ll_conn_sm *connsm)
     int rc;
     uint8_t opcode;
 
+#if MYNEWT_VAL(BLE_LL_HCI_LLCP_TRACE)
+    ble_ll_hci_ev_send_llcp_trace(0x04, connsm->conn_handle, connsm->event_cntr,
+                                  txpdu->om_data, txpdu->om_len);
+#endif
+
     rc = 0;
     opcode = txpdu->om_data[0];
     switch (opcode) {
@@ -2547,18 +2831,18 @@ ble_ll_ctrl_tx_done(struct os_mbuf *txpdu, struct ble_ll_conn_sm *connsm)
                 connsm->csmflags.cfbit.host_expects_upd_event = 1;
             }
         }
-#if (MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_ENCRYPTION) == 1)
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_ENCRYPTION)
         if (connsm->enc_data.enc_state > CONN_ENC_S_ENCRYPTED) {
             connsm->enc_data.enc_state = CONN_ENC_S_UNENCRYPTED;
         }
 #endif
         break;
     case BLE_LL_CTRL_REJECT_IND:
-#if (MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_ENCRYPTION) == 1)
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_ENCRYPTION)
         connsm->enc_data.enc_state = CONN_ENC_S_UNENCRYPTED;
 #endif
         break;
-#if (MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_ENCRYPTION) == 1)
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_ENCRYPTION)
     case BLE_LL_CTRL_PAUSE_ENC_REQ:
         /* note: fall-through intentional */
     case BLE_LL_CTRL_ENC_REQ:
@@ -2585,14 +2869,14 @@ ble_ll_ctrl_tx_done(struct os_mbuf *txpdu, struct ble_ll_conn_sm *connsm)
 #if (BLE_LL_BT5_PHY_SUPPORTED == 1)
     case BLE_LL_CTRL_PHY_REQ:
         if (connsm->conn_role == BLE_LL_CONN_ROLE_SLAVE) {
-            if (connsm->phy_data.req_pref_tx_phys_mask & BLE_PHY_MASK_1M) {
-                connsm->phy_tx_transition = BLE_PHY_1M;
-            } else if (connsm->phy_data.req_pref_tx_phys_mask & BLE_PHY_MASK_2M) {
-                connsm->phy_tx_transition = BLE_PHY_2M;
-            } else if (connsm->phy_data.req_pref_tx_phys_mask & BLE_PHY_MASK_CODED) {
-                connsm->phy_tx_transition = BLE_PHY_CODED;
-            }
+            connsm->phy_tx_transition =
+                    ble_ll_ctrl_phy_tx_transition_get(
+                            connsm->phy_data.req_pref_tx_phys_mask);
         }
+        break;
+    case BLE_LL_CTRL_PHY_UPDATE_IND:
+        connsm->phy_tx_transition =
+                    ble_ll_ctrl_phy_tx_transition_get(txpdu->om_data[2]);
         break;
 #endif
     default:

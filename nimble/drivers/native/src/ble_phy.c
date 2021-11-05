@@ -33,6 +33,7 @@ struct ble_phy_obj
 {
     uint8_t phy_stats_initialized;
     int8_t  phy_txpwr_dbm;
+    int16_t rx_pwr_compensation;
     uint8_t phy_chan;
     uint8_t phy_state;
     uint8_t phy_transition;
@@ -275,7 +276,8 @@ ble_phy_isr(void)
         /* Construct BLE header before handing up */
         ble_hdr = &g_ble_phy_data.rxhdr;
         ble_hdr->rxinfo.flags = 0;
-        ble_hdr->rxinfo.rssi = -77;    /* XXX: dummy rssi */
+        /* XXX: dummy rssi */
+        ble_hdr->rxinfo.rssi = -77 + g_ble_phy_data.rx_pwr_compensation;
         ble_hdr->rxinfo.channel = g_ble_phy_data.phy_chan;
         ble_hdr->rxinfo.phy = BLE_PHY_1M;
 #if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_EXT_ADV)
@@ -312,6 +314,8 @@ ble_phy_init(void)
     g_ble_phy_data.phy_state = BLE_PHY_STATE_IDLE;
     g_ble_phy_data.phy_chan = BLE_PHY_NUM_CHANS;
 
+    g_ble_phy_data.rx_pwr_compensation = 0;
+
     /* XXX: emulate ISR? */
 
     return 0;
@@ -337,7 +341,7 @@ ble_phy_restart_rx(void)
 {
 }
 
-#if (MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_ENCRYPTION) == 1)
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_ENCRYPTION)
 /**
  * Called to enable encryption at the PHY. Note that this state will persist
  * in the PHY; in other words, if you call this function you have to call
@@ -515,6 +519,12 @@ ble_phy_txpwr_get(void)
     return g_ble_phy_data.phy_txpwr_dbm;
 }
 
+void
+ble_phy_set_rx_pwr_compensation(int8_t compensation)
+{
+    g_ble_phy_data.rx_pwr_compensation = compensation;
+}
+
 /**
  * ble phy setchan
  *
@@ -600,7 +610,7 @@ ble_phy_max_data_pdu_pyld(void)
     return BLE_LL_DATA_PDU_MAX_PYLD;
 }
 
-#if (MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_PRIVACY) == 1)
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_PRIVACY)
 void
 ble_phy_resolv_list_enable(void)
 {
@@ -628,5 +638,15 @@ ble_phy_xcvr_state_get(void)
 
 void
 ble_phy_wfr_enable(int txrx, uint8_t tx_phy_mode, uint32_t wfr_usecs)
+{
+}
+
+void
+ble_phy_rfclk_enable(void)
+{
+}
+
+void
+ble_phy_rfclk_disable(void)
 {
 }

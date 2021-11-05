@@ -34,6 +34,7 @@
  */
 
 #include "os/os.h"
+#include "os/os_trace_api.h"
 
 #include <assert.h>
 #include <stddef.h>
@@ -243,13 +244,17 @@ os_mbuf_get(struct os_mbuf_pool *omp, uint16_t leadingspace)
 {
     struct os_mbuf *om;
 
+    os_trace_api_u32x2(OS_TRACE_ID_MBUF_GET, (uint32_t)omp,
+                       (uint32_t)(uintptr_t)leadingspace);
+
     if (leadingspace > omp->omp_databuf_len) {
-        goto err;
+        om = NULL;
+        goto done;
     }
 
     om = os_memblock_get(omp->omp_pool);
     if (!om) {
-        goto err;
+        goto done;
     }
 
     SLIST_NEXT(om, om_next) = NULL;
@@ -259,9 +264,9 @@ os_mbuf_get(struct os_mbuf_pool *omp, uint16_t leadingspace)
     om->om_data = (&om->om_databuf[0] + leadingspace);
     om->om_omp = omp;
 
-    return (om);
-err:
-    return (NULL);
+done:
+    os_trace_api_ret_u32(OS_TRACE_ID_MBUF_GET, (uint32_t)(uintptr_t)om);
+    return om;
 }
 
 struct os_mbuf *
@@ -271,10 +276,14 @@ os_mbuf_get_pkthdr(struct os_mbuf_pool *omp, uint8_t user_pkthdr_len)
     struct os_mbuf_pkthdr *pkthdr;
     struct os_mbuf *om;
 
+    os_trace_api_u32x2(OS_TRACE_ID_MBUF_GET_PKTHDR, (uint32_t)(uintptr_t)omp,
+                       (uint32_t)user_pkthdr_len);
+
     /* User packet header must fit inside mbuf */
     pkthdr_len = user_pkthdr_len + sizeof(struct os_mbuf_pkthdr);
     if ((pkthdr_len > omp->omp_databuf_len) || (pkthdr_len > 255)) {
-        return NULL;
+        om = NULL;
+        goto done;
     }
 
     om = os_mbuf_get(omp, 0);
@@ -288,6 +297,8 @@ os_mbuf_get_pkthdr(struct os_mbuf_pool *omp, uint8_t user_pkthdr_len)
         STAILQ_NEXT(pkthdr, omp_next) = NULL;
     }
 
+done:
+    os_trace_api_ret_u32(OS_TRACE_ID_MBUF_GET_PKTHDR, (uint32_t)(uintptr_t)om);
     return om;
 }
 
@@ -296,15 +307,19 @@ os_mbuf_free(struct os_mbuf *om)
 {
     int rc;
 
+    os_trace_api_u32(OS_TRACE_ID_MBUF_FREE, (uint32_t)(uintptr_t)om);
+
     if (om->om_omp != NULL) {
         rc = os_memblock_put(om->om_omp->omp_pool, om);
         if (rc != 0) {
-            goto err;
+            goto done;
         }
     }
 
-    return (0);
-err:
+    rc = 0;
+
+done:
+    os_trace_api_ret_u32(OS_TRACE_ID_MBUF_FREE, (uint32_t)rc);
     return (rc);
 }
 
@@ -314,19 +329,23 @@ os_mbuf_free_chain(struct os_mbuf *om)
     struct os_mbuf *next;
     int rc;
 
+    os_trace_api_u32(OS_TRACE_ID_MBUF_FREE_CHAIN, (uint32_t)(uintptr_t)om);
+
     while (om != NULL) {
         next = SLIST_NEXT(om, om_next);
 
         rc = os_mbuf_free(om);
         if (rc != 0) {
-            goto err;
+            goto done;
         }
 
         om = next;
     }
 
-    return (0);
-err:
+    rc = 0;
+
+done:
+    os_trace_api_ret_u32(OS_TRACE_ID_MBUF_FREE_CHAIN, (uint32_t)rc);
     return (rc);
 }
 
@@ -346,6 +365,20 @@ _os_mbuf_copypkthdr(struct os_mbuf *new_buf, struct os_mbuf *old_buf)
            old_buf->om_pkthdr_len);
     new_buf->om_pkthdr_len = old_buf->om_pkthdr_len;
     new_buf->om_data = new_buf->om_databuf + old_buf->om_pkthdr_len;
+}
+
+uint16_t
+os_mbuf_len(const struct os_mbuf *om)
+{
+    uint16_t len;
+
+    len = 0;
+    while (om != NULL) {
+        len += om->om_len;
+        om = SLIST_NEXT(om, om_next);
+    }
+
+    return len;
 }
 
 int
@@ -1037,3 +1070,176 @@ os_mbuf_trim_front(struct os_mbuf *om)
     return om;
 }
 
+int
+os_mbuf_widen(struct os_mbuf *om, uint16_t off, uint16_t len)
+{
+    struct os_mbuf *first_new;
+    struct os_mbuf *edge_om;
+    struct os_mbuf *prev;
+    struct os_mbuf *cur;
+    uint16_t rem_len;
+    uint16_t sub_off;
+    int rc;
+
+    /* Locate the mbuf and offset within the chain where the gap will be
+     * inserted.
+     */
+    edge_om = os_mbuf_off(om, off, &sub_off);
+    if (edge_om == NULL) {
+        return OS_EINVAL;
+    }
+
+    /* If the mbuf has sufficient capacity for the gap, just make room within
+     * the mbuf.
+     */
+    if (OS_MBUF_TRAILINGSPACE(edge_om) >= len) {
+        memmove(edge_om->om_data + sub_off + len,
+                edge_om->om_data + sub_off,
+                edge_om->om_len - sub_off);
+        edge_om->om_len += len;
+        if (OS_MBUF_IS_PKTHDR(om)) {
+            OS_MBUF_PKTHDR(om)->omp_len += len;
+        }
+        return 0;
+    }
+
+    /* Otherwise, allocate new mbufs until the chain has sufficient capacity
+     * for the gap.
+     */
+    rem_len = len;
+    first_new = NULL;
+    prev = NULL;
+    while (rem_len > 0) {
+        cur = os_mbuf_get(om->om_omp, 0);
+        if (cur == NULL) {
+            /* Free only the mbufs that this function allocated. */
+            os_mbuf_free_chain(first_new);
+            return OS_ENOMEM;
+        }
+
+        /* Remember the start of the chain of new mbufs. */
+        if (first_new == NULL) {
+            first_new = cur;
+        }
+
+        if (rem_len > OS_MBUF_TRAILINGSPACE(cur)) {
+            cur->om_len = OS_MBUF_TRAILINGSPACE(cur);
+        } else {
+            cur->om_len = rem_len;
+        }
+        rem_len -= cur->om_len;
+
+        if (prev != NULL) {
+            SLIST_NEXT(prev, om_next) = cur;
+        }
+        prev = cur;
+    }
+
+    /* Move the misplaced data from the edge mbuf over to the right side of the
+     * gap.
+     */
+    rc = os_mbuf_append(prev, edge_om->om_data + sub_off,
+                        edge_om->om_len - sub_off);
+    if (rc != 0) {
+        os_mbuf_free_chain(first_new);
+        return OS_ENOMEM;
+    }
+    edge_om->om_len = sub_off;
+
+    /* Insert the gap into the chain. */
+    SLIST_NEXT(prev, om_next) = SLIST_NEXT(edge_om, om_next);
+    SLIST_NEXT(edge_om, om_next) = first_new;
+
+    if (OS_MBUF_IS_PKTHDR(om)) {
+        OS_MBUF_PKTHDR(om)->omp_len += len;
+    }
+
+    return 0;
+}
+
+struct os_mbuf *
+os_mbuf_pack_chains(struct os_mbuf *m1, struct os_mbuf *m2)
+{
+    uint16_t rem_len;
+    uint16_t copylen;
+    uint8_t *dptr;
+    struct os_mbuf *cur;
+    struct os_mbuf *next;
+
+    /* If m1 is NULL, return NULL */
+    if (m1 == NULL) {
+        return NULL;
+    }
+
+    /*
+     * Concatenate the two chains to start. This will discard packet header in
+     * m2 and adjust packet length in m1 if m1 has a packet header.
+     */
+    if (m2 != NULL) {
+        os_mbuf_concat(m1, m2);
+    }
+
+    cur = m1;
+    while (1) {
+        /* If there is leading space in the mbuf, move data up */
+        if (OS_MBUF_LEADINGSPACE(cur)) {
+            dptr = &cur->om_databuf[0];
+            if (OS_MBUF_IS_PKTHDR(cur)) {
+                dptr += cur->om_pkthdr_len;
+            }
+            memmove(dptr, cur->om_data, cur->om_len);
+            cur->om_data = dptr;
+        }
+
+        /* Set pointer to where we will begin copying data in current mbuf */
+        dptr = cur->om_data + cur->om_len;
+
+        /* Get a pointer to the next buf we want to absorb */
+        next = SLIST_NEXT(cur, om_next);
+
+        /*
+         * Is there trailing space in the mbuf? If so, copy data from
+         * following mbufs into the current mbuf
+         */
+        rem_len = OS_MBUF_TRAILINGSPACE(cur);
+        while (rem_len && next) {
+            copylen = min(rem_len, next->om_len);
+            memcpy(dptr, next->om_data, copylen);
+            cur->om_len += copylen;
+            dptr += copylen;
+            rem_len -= copylen;
+
+            /*
+             * We copied bytes from the next mbuf. Move the data pointer
+             * and subtract from its length
+             */
+            next->om_data += copylen;
+            next->om_len -= copylen;
+
+            /*
+             * Keep removing and freeing consecutive zero length mbufs,
+             * stopping when we find one with data in it or we have
+             * reached the end. This will prevent any zero length mbufs
+             * from remaining in the chain.
+             */
+            while (next->om_len == 0) {
+                SLIST_NEXT(cur, om_next) = SLIST_NEXT(next, om_next);
+                os_mbuf_free(next);
+                next = SLIST_NEXT(cur, om_next);
+                if (next == NULL) {
+                    break;
+                }
+            }
+        }
+
+        /* If no mbufs are left, we are done */
+        if (next == NULL) {
+            break;
+        }
+
+        /* Move cur to next as we filled up current */
+        cur = next;
+    }
+
+    return m1;
+}

@@ -20,7 +20,7 @@
 #include "syscfg/syscfg.h"
 #include "sysinit/sysinit.h"
 
-#if MYNEWT_VAL(BLE_LL_DIRECT_TEST_MODE) == 1
+#if MYNEWT_VAL(BLE_LL_DTM)
 
 #include <assert.h>
 #include "os/os.h"
@@ -28,7 +28,7 @@
 #include "controller/ble_ll.h"
 #include "controller/ble_phy.h"
 #include "controller/ble_ll_sched.h"
-#include "controller/ble_ll_xcvr.h"
+#include "controller/ble_ll_rfmgmt.h"
 #include "ble_ll_dtm_priv.h"
 
 STATS_SECT_START(ble_ll_dtm_stats)
@@ -49,12 +49,17 @@ struct dtm_ctx {
     uint8_t itvl_rem_usec;
     uint16_t num_of_packets;
     uint32_t itvl_ticks;
+#if MYNEWT_VAL(BLE_LL_DTM_EXTENSIONS)
+    uint16_t num_of_packets_max;
+#endif
     int active;
     uint8_t rf_channel;
     uint8_t phy_mode;
     struct os_mbuf *om;
     struct ble_npl_event evt;
     struct ble_ll_sched_item sch;
+    uint32_t pdu_start_ticks;
+    uint8_t pdu_start_usecs;
 };
 
 static struct dtm_ctx g_ble_ll_dtm_ctx;
@@ -140,17 +145,22 @@ static const uint8_t channel_rf_to_index[] = {
 #define BLE_DTM_SYNC_WORD          (0x71764129)
 #define BLE_DTM_CRC                (0x555555)
 
+static void ble_ll_dtm_ctx_free(struct dtm_ctx * ctx);
+
 static void
 ble_ll_dtm_set_next(struct dtm_ctx *ctx)
 {
     struct ble_ll_sched_item *sch = &ctx->sch;
 
-    sch->start_time += ctx->itvl_ticks;
-    sch->remainder += ctx->itvl_rem_usec;
-    if (sch->remainder > 30) {
-       sch->start_time++;
-       sch->remainder -= 30;
+    ctx->pdu_start_ticks += ctx->itvl_ticks;
+    ctx->pdu_start_usecs += ctx->itvl_rem_usec;
+    if (ctx->pdu_start_usecs >= 31) {
+       ctx->pdu_start_ticks++;
+       ctx->pdu_start_usecs -= 31;
     }
+
+    sch->start_time = ctx->pdu_start_ticks;
+    sch->remainder = ctx->pdu_start_usecs;
 
     sch->start_time -= g_ble_ll_sched_offset_ticks;
 }
@@ -168,6 +178,18 @@ ble_ll_dtm_ev_tx_resched_cb(struct ble_npl_event *evt) {
         return;
     }
     OS_EXIT_CRITICAL(sr);
+
+#if MYNEWT_VAL(BLE_LL_DTM_EXTENSIONS)
+    if (g_ble_ll_dtm_ctx.num_of_packets_max &&
+        (g_ble_ll_dtm_ctx.num_of_packets == g_ble_ll_dtm_ctx.num_of_packets_max)) {
+        /*
+         * XXX do not send more packets, but also do not stop DTM - it shall be
+         * stopped as usual by HCI command since there is no standard way to
+         * signal end of test to host.
+         */
+        return;
+    }
+#endif
 
     ble_ll_dtm_set_next(ctx);
     rc = ble_ll_sched_dtm(&ctx->sch);
@@ -193,6 +215,8 @@ ble_ll_dtm_tx_done(void *arg)
     if (!ctx->active) {
         return;
     }
+
+    g_ble_ll_dtm_ctx.num_of_packets++;
 
     /* Reschedule event in LL context */
     ble_npl_eventq_put(&g_ble_ll_data.ll_evq, &ctx->evt);
@@ -237,7 +261,7 @@ ble_ll_dtm_tx_sched_cb(struct ble_ll_sched_item *sch)
 
     ble_ll_state_set(BLE_LL_STATE_DTM);
 
-    return BLE_LL_SCHED_STATE_DONE;
+    return BLE_LL_SCHED_STATE_RUNNING;
 
 resched:
     /* Reschedule from LL task if late for this PDU */
@@ -249,7 +273,8 @@ resched:
 }
 
 static void
-ble_ll_dtm_calculate_itvl(struct dtm_ctx *ctx, uint8_t len, int phy_mode)
+ble_ll_dtm_calculate_itvl(struct dtm_ctx *ctx, uint8_t len,
+                          uint16_t cmd_interval, int phy_mode)
 {
     uint32_t l;
     uint32_t itvl_usec;
@@ -258,6 +283,12 @@ ble_ll_dtm_calculate_itvl(struct dtm_ctx *ctx, uint8_t len, int phy_mode)
     /* Calculate interval as per spec Bluetooth 5.0 Vol 6. Part F, 4.1.6 */
     l = ble_ll_pdu_tx_time_get(len + BLE_LL_PDU_HDR_LEN, phy_mode);
     itvl_usec = ((l + 249 + 624) / 625) * 625;
+
+#if MYNEWT_VAL(BLE_LL_DTM_EXTENSIONS)
+    if (cmd_interval > itvl_usec) {
+        itvl_usec = cmd_interval;
+    }
+#endif
 
     itvl_ticks = os_cputime_usecs_to_ticks(itvl_usec);
     ctx->itvl_rem_usec = (itvl_usec - os_cputime_ticks_to_usecs(itvl_ticks));
@@ -270,21 +301,27 @@ ble_ll_dtm_calculate_itvl(struct dtm_ctx *ctx, uint8_t len, int phy_mode)
 
 static int
 ble_ll_dtm_tx_create_ctx(uint8_t packet_payload, uint8_t len,
-                         uint8_t rf_channel, uint8_t phy_mode)
+                         uint8_t rf_channel, uint8_t phy_mode,
+                         uint16_t cmd_interval, uint16_t cmd_pkt_count)
 {
     int rc = 0;
     uint8_t byte_pattern;
     struct ble_mbuf_hdr *ble_hdr;
     struct os_mbuf *m;
-    struct ble_ll_sched_item *sch = &g_ble_ll_dtm_ctx.sch;
+    struct dtm_ctx *ctx = &g_ble_ll_dtm_ctx;
+    struct ble_ll_sched_item *sch = &ctx->sch;
 
     /* MSYS is big enough to get continues memory */
     m = os_msys_get_pkthdr(len, sizeof(struct ble_mbuf_hdr));
-    g_ble_ll_dtm_ctx.om = m;
+    ctx->om = m;
     BLE_LL_ASSERT(g_ble_ll_dtm_ctx.om);
 
-    g_ble_ll_dtm_ctx.phy_mode = phy_mode;
-    g_ble_ll_dtm_ctx.rf_channel = rf_channel;
+    ctx->phy_mode = phy_mode;
+    ctx->rf_channel = rf_channel;
+    ctx->num_of_packets = 0;
+#if MYNEWT_VAL(BLE_LL_DTM_EXTENSIONS)
+    ctx->num_of_packets_max = cmd_pkt_count;
+#endif
 
     /* Set BLE transmit header */
     ble_hdr = BLE_MBUF_HDR_PTR(m);
@@ -333,24 +370,24 @@ ble_ll_dtm_tx_create_ctx(uint8_t packet_payload, uint8_t len,
     }
 
 schedule:
+    ble_phy_enable_dtm();
 
     sch->sched_cb = ble_ll_dtm_tx_sched_cb;
-    sch->cb_arg = &g_ble_ll_dtm_ctx;
+    sch->cb_arg = ctx;
     sch->sched_type = BLE_LL_SCHED_TYPE_DTM;
-    sch->start_time =  os_cputime_get32() +
-                                       os_cputime_usecs_to_ticks(5000);
 
     /* Prepare os_event */
-    ble_npl_event_init(&g_ble_ll_dtm_ctx.evt, ble_ll_dtm_ev_tx_resched_cb,
-                       &g_ble_ll_dtm_ctx);
+    ble_npl_event_init(&ctx->evt, ble_ll_dtm_ev_tx_resched_cb, ctx);
 
-    ble_ll_dtm_calculate_itvl(&g_ble_ll_dtm_ctx, len, phy_mode);
+    ble_ll_dtm_calculate_itvl(ctx, len, cmd_interval, phy_mode);
+
+    ctx->pdu_start_ticks = ble_ll_rfmgmt_enable_now();
+    ctx->pdu_start_usecs = 0;
+    ble_ll_dtm_set_next(ctx);
 
     /* Set some start point for TX packets */
     rc = ble_ll_sched_dtm(sch);
     BLE_LL_ASSERT(rc == 0);
-
-    ble_phy_enable_dtm();
 
     g_ble_ll_dtm_ctx.active = 1;
     return 0;
@@ -373,8 +410,7 @@ ble_ll_dtm_rx_start(void)
 #endif
 
     OS_ENTER_CRITICAL(sr);
-    rc = ble_phy_rx_set_start_time(os_cputime_get32() +
-                                   g_ble_ll_sched_offset_ticks, 0);
+    rc = ble_phy_rx_set_start_time(os_cputime_get32(), 0);
     OS_EXIT_CRITICAL(sr);
     if (rc && rc != BLE_PHY_ERR_RX_LATE) {
         return rc;
@@ -382,33 +418,46 @@ ble_ll_dtm_rx_start(void)
 
     ble_ll_state_set(BLE_LL_STATE_DTM);
 
-#ifdef BLE_XCVR_RFCLK
-    if (ble_ll_xcvr_rfclk_state() == BLE_RFCLK_STATE_OFF) {
-        ble_ll_xcvr_rfclk_start_now(os_cputime_get32());
-    }
-#endif
-
     return 0;
+}
+
+static int
+ble_ll_dtm_rx_sched_cb(struct ble_ll_sched_item *sch)
+{
+    if (ble_ll_dtm_rx_start() != 0) {
+        ble_npl_eventq_put(&g_ble_ll_data.ll_evq, &g_ble_ll_dtm_ctx.evt);
+        STATS_INC(ble_ll_dtm_stats, rx_failed);
+        return BLE_LL_SCHED_STATE_DONE;
+    }
+
+    return BLE_LL_SCHED_STATE_RUNNING;
 }
 
 static int
 ble_ll_dtm_rx_create_ctx(uint8_t rf_channel, uint8_t phy_mode)
 {
+    struct ble_ll_sched_item *sch = &g_ble_ll_dtm_ctx.sch;
+    int rc;
+
     g_ble_ll_dtm_ctx.phy_mode = phy_mode;
     g_ble_ll_dtm_ctx.rf_channel = rf_channel;
-    g_ble_ll_dtm_ctx.active = 1;
 
     STATS_CLEAR(ble_ll_dtm_stats, rx_count);
 
     ble_npl_event_init(&g_ble_ll_dtm_ctx.evt, ble_ll_dtm_ev_rx_restart_cb,
                        NULL);
 
-    if (ble_ll_dtm_rx_start() != 0) {
-        return 1;
-    }
+    sch->sched_cb = ble_ll_dtm_rx_sched_cb;
+    sch->cb_arg = &g_ble_ll_dtm_ctx;
+    sch->sched_type = BLE_LL_SCHED_TYPE_DTM;
+    sch->start_time =  ble_ll_rfmgmt_enable_now();
+
+    rc = ble_ll_sched_dtm(sch);
+    BLE_LL_ASSERT(rc == 0);
 
     ble_phy_enable_dtm();
 
+    g_ble_ll_dtm_ctx.active = 1;
     return 0;
 }
 
@@ -422,96 +471,148 @@ ble_ll_dtm_ctx_free(struct dtm_ctx * ctx)
         OS_EXIT_CRITICAL(sr);
         return;
     }
-    OS_EXIT_CRITICAL(sr);
 
     ble_ll_sched_rmv_elem(&ctx->sch);
+    ble_npl_eventq_remove(&g_ble_ll_data.ll_evq, &g_ble_ll_dtm_ctx.evt);
 
     ble_phy_disable();
     ble_phy_disable_dtm();
     ble_ll_state_set(BLE_LL_STATE_STANDBY);
-#ifdef BLE_XCVR_RFCLK
-    ble_ll_xcvr_rfclk_stop();
-#endif
+    ble_ll_rfmgmt_release();
 
     os_mbuf_free_chain(ctx->om);
     memset(ctx, 0, sizeof(*ctx));
+    OS_EXIT_CRITICAL(sr);
 }
 
-int
-ble_ll_dtm_tx_test(uint8_t *cmdbuf, bool enhanced)
+static int
+ble_ll_dtm_tx_test(uint8_t tx_chan, uint8_t len, uint8_t packet_payload,
+                   uint8_t hci_phy, uint16_t interval, uint16_t pkt_count)
 {
-    uint8_t tx_chan = cmdbuf[0];
-    uint8_t len = cmdbuf[1];
-    uint8_t packet_payload = cmdbuf[2];
-    uint8_t phy_mode = BLE_PHY_MODE_1M;
+    uint8_t phy_mode;
 
     if (g_ble_ll_dtm_ctx.active) {
         return BLE_ERR_CTLR_BUSY;
     }
 
-    if (enhanced) {
-        switch (cmdbuf[3]) {
-        case BLE_HCI_LE_PHY_1M:
-            phy_mode = BLE_PHY_MODE_1M;
-            break;
+    switch (hci_phy) {
+    case BLE_HCI_LE_PHY_1M:
+        phy_mode = BLE_PHY_MODE_1M;
+        break;
 #if MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_2M_PHY)
-        case BLE_HCI_LE_PHY_2M:
-            phy_mode = BLE_PHY_MODE_2M;
-            break;
+    case BLE_HCI_LE_PHY_2M:
+        phy_mode = BLE_PHY_MODE_2M;
+        break;
 #endif
 #if MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_CODED_PHY)
-        case BLE_HCI_LE_PHY_CODED_S8:
-            phy_mode = BLE_PHY_MODE_CODED_125KBPS;
-            break;
-        case BLE_HCI_LE_PHY_CODED_S2:
-            phy_mode = BLE_PHY_MODE_CODED_500KBPS;
-            break;
+    case BLE_HCI_LE_PHY_CODED_S8:
+        phy_mode = BLE_PHY_MODE_CODED_125KBPS;
+        break;
+    case BLE_HCI_LE_PHY_CODED_S2:
+        phy_mode = BLE_PHY_MODE_CODED_500KBPS;
+        break;
 #endif
-        default:
-            return BLE_ERR_INV_HCI_CMD_PARMS;
-        }
+    default:
+        return BLE_ERR_INV_HCI_CMD_PARMS;
     }
 
     if (tx_chan > 0x27 || packet_payload > 0x07) {
         return BLE_ERR_INV_HCI_CMD_PARMS;
     }
 
-    if (ble_ll_dtm_tx_create_ctx(packet_payload, len, tx_chan, phy_mode)) {
+    if (ble_ll_dtm_tx_create_ctx(packet_payload, len, tx_chan, phy_mode,
+                                 interval, pkt_count)) {
         return BLE_ERR_UNSPECIFIED;
     }
 
     return BLE_ERR_SUCCESS;
 }
 
-int ble_ll_dtm_rx_test(uint8_t *cmdbuf, bool enhanced)
+#if MYNEWT_VAL(BLE_LL_DTM_EXTENSIONS)
+static int
+ble_ll_hci_dtm_tx_test_ext(const uint8_t *cmdbuf)
 {
-    uint8_t rx_chan = cmdbuf[0];
-    uint8_t phy_mode = BLE_PHY_MODE_1M;
+    const struct ble_hci_le_tx_test_ext_cp *cmd = (const void *) cmdbuf;
+
+    return ble_ll_dtm_tx_test(cmd->tx_chan, cmd->test_data_len, cmd->payload,
+                              BLE_HCI_LE_PHY_1M, le16toh(cmd->interval),
+                              le16toh(cmd->pkt_count));
+}
+
+static int
+ble_ll_hci_dtm_tx_test_v2_ext(const uint8_t *cmdbuf)
+{
+    const struct ble_hci_le_tx_test_v2_ext_cp *cmd = (const void *) cmdbuf;
+
+    return ble_ll_dtm_tx_test(cmd->tx_chan, cmd->test_data_len, cmd->payload,
+                              cmd->phy, le16toh(cmd->interval),
+                              le16toh(cmd->pkt_count));
+}
+#endif
+
+int
+ble_ll_hci_dtm_tx_test(const uint8_t *cmdbuf, uint8_t len)
+{
+    const struct ble_hci_le_tx_test_cp *cmd = (const void *) cmdbuf;
+
+#if MYNEWT_VAL(BLE_LL_DTM_EXTENSIONS)
+    if (len == sizeof(struct ble_hci_le_tx_test_ext_cp)) {
+        return ble_ll_hci_dtm_tx_test_ext(cmdbuf);
+    }
+#endif
+
+    if (len != sizeof(*cmd)) {
+        return BLE_ERR_INV_HCI_CMD_PARMS;
+    }
+
+    return ble_ll_dtm_tx_test(cmd->tx_chan, cmd->test_data_len, cmd->payload,
+                              BLE_HCI_LE_PHY_1M, 0, 0);
+}
+
+int
+ble_ll_hci_dtm_tx_test_v2(const uint8_t *cmdbuf, uint8_t len)
+{
+    const struct ble_hci_le_tx_test_v2_cp *cmd = (const void *) cmdbuf;
+
+#if MYNEWT_VAL(BLE_LL_DTM_EXTENSIONS)
+    if (len == sizeof(struct ble_hci_le_tx_test_v2_ext_cp)) {
+        return ble_ll_hci_dtm_tx_test_v2_ext(cmdbuf);
+    }
+#endif
+
+    if (len != sizeof(*cmd)) {
+        return BLE_ERR_INV_HCI_CMD_PARMS;
+    }
+
+    return ble_ll_dtm_tx_test(cmd->tx_chan, cmd->test_data_len, cmd->payload,
+                              cmd->phy, 0, 0);
+}
+
+static int
+ble_ll_dtm_rx_test(uint8_t rx_chan, uint8_t hci_phy)
+{
+    uint8_t phy_mode;
 
     if (g_ble_ll_dtm_ctx.active) {
         return BLE_ERR_CTLR_BUSY;
     }
 
-    /*XXX What to do with modulation cmdbuf[2]? */
-
-    if (enhanced) {
-        switch (cmdbuf[1]) {
-        case BLE_HCI_LE_PHY_1M:
-            phy_mode = BLE_PHY_MODE_1M;
-            break;
+    switch (hci_phy) {
+    case BLE_HCI_LE_PHY_1M:
+        phy_mode = BLE_PHY_MODE_1M;
+        break;
 #if MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_2M_PHY)
-        case BLE_HCI_LE_PHY_2M:
-            phy_mode = BLE_PHY_MODE_2M;
-            break;
+    case BLE_HCI_LE_PHY_2M:
+        phy_mode = BLE_PHY_MODE_2M;
+        break;
 #endif
 #if MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_CODED_PHY)
-        case BLE_HCI_LE_PHY_CODED:
-            phy_mode = BLE_PHY_MODE_CODED_500KBPS;
-            break;
+    case BLE_HCI_LE_PHY_CODED:
+        phy_mode = BLE_PHY_MODE_CODED_500KBPS;
+        break;
 #endif
-        default:
-            return BLE_ERR_INV_HCI_CMD_PARMS;
-        }
+    default:
+        return BLE_ERR_INV_HCI_CMD_PARMS;
     }
 
     if (rx_chan > 0x27) {
@@ -523,6 +624,30 @@ int ble_ll_dtm_rx_test(uint8_t *cmdbuf, bool enhanced)
     }
 
     return BLE_ERR_SUCCESS;
+}
+
+int ble_ll_hci_dtm_rx_test(const uint8_t *cmdbuf, uint8_t len)
+{
+    const struct ble_hci_le_rx_test_cp *cmd = (const void *) cmdbuf;
+
+    if (len != sizeof(*cmd)) {
+        return BLE_ERR_INV_HCI_CMD_PARMS;
+    }
+
+    return ble_ll_dtm_rx_test(cmd->rx_chan, BLE_HCI_LE_PHY_1M);
+}
+
+int ble_ll_hci_dtm_rx_test_v2(const uint8_t *cmdbuf, uint8_t len)
+{
+    const struct ble_hci_le_rx_test_v2_cp *cmd = (const void *) cmdbuf;
+
+    if (len != sizeof(*cmd)) {
+        return BLE_ERR_INV_HCI_CMD_PARMS;
+    }
+
+    /* TODO ignoring modulation index */
+
+    return ble_ll_dtm_rx_test(cmd->rx_chan, cmd->phy);
 }
 
 int ble_ll_dtm_end_test(uint8_t *rsp, uint8_t *rsplen)

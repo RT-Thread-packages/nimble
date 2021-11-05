@@ -22,7 +22,7 @@
 #include <limits.h>
 #include "testutil/testutil.h"
 #include "nimble/ble.h"
-#include "host/ble_hs_test.h"
+#include "ble_hs_test.h"
 #include "host/ble_gatt.h"
 #include "host/ble_uuid.h"
 #include "ble_hs_test_util.h"
@@ -227,7 +227,7 @@ ble_gatt_disc_d_test_misc_all(uint16_t chr_val_handle, uint16_t end_handle,
     ble_gatt_disc_d_test_misc_verify_dscs(dscs, stop_after);
 }
 
-TEST_CASE(ble_gatt_disc_d_test_1)
+TEST_CASE_SELF(ble_gatt_disc_d_test_1)
 {
     /*** One 16-bit descriptor. */
     ble_gatt_disc_d_test_misc_all(5, 10, 0,
@@ -350,9 +350,11 @@ TEST_CASE(ble_gatt_disc_d_test_1)
             0
         } })
     );
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_gatt_disc_d_test_oom_all)
+TEST_CASE_SELF(ble_gatt_disc_d_test_oom_all)
 {
     struct ble_gatt_disc_d_test_dsc dscs[] = {
         {
@@ -433,20 +435,12 @@ TEST_CASE(ble_gatt_disc_d_test_oom_all)
                                     BLE_ATT_ERR_ATTR_NOT_FOUND,
                                     1);
     ble_gatt_disc_d_test_misc_verify_dscs(dscs, 0);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
 TEST_SUITE(ble_gatt_disc_d_test_suite)
 {
-    tu_suite_set_post_test_cb(ble_hs_test_util_post_test, NULL);
-
     ble_gatt_disc_d_test_1();
     ble_gatt_disc_d_test_oom_all();
-}
-
-int
-ble_gatt_disc_d_test_all(void)
-{
-    ble_gatt_disc_d_test_suite();
-
-    return tu_any_failed;
 }

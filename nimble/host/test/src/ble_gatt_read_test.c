@@ -22,7 +22,7 @@
 #include <limits.h>
 #include "testutil/testutil.h"
 #include "nimble/ble.h"
-#include "host/ble_hs_test.h"
+#include "ble_hs_test.h"
 #include "host/ble_uuid.h"
 #include "ble_hs_test_util.h"
 
@@ -497,7 +497,7 @@ ble_gatt_read_test_misc_mult_verify_bad(
     TEST_ASSERT(!ble_gattc_any_jobs());
 }
 
-TEST_CASE(ble_gatt_read_test_by_handle)
+TEST_CASE_SELF(ble_gatt_read_test_by_handle)
 {
     /* Read a seven-byte attribute. */
     ble_gatt_read_test_misc_verify_good(
@@ -538,9 +538,11 @@ TEST_CASE(ble_gatt_read_test_by_handle)
             .value = { 0xfa, 0x4c },
             .value_len = 2
         } });
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_gatt_read_test_by_uuid)
+TEST_CASE_SELF(ble_gatt_read_test_by_uuid)
 {
     /* Read a single seven-byte attribute. */
     ble_gatt_read_test_misc_uuid_verify_good(1, 100, BLE_UUID16_DECLARE(0x1234), 0,
@@ -605,9 +607,11 @@ TEST_CASE(ble_gatt_read_test_by_uuid)
         }, {
             0,
         } });
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_gatt_read_test_long)
+TEST_CASE_SELF(ble_gatt_read_test_long)
 {
     uint8_t data512[512];
     int i;
@@ -665,9 +669,11 @@ TEST_CASE(ble_gatt_read_test_long)
             .value = { 1, 2, 3, 4, 5, 6, 7 },
             .value_len = 7
         } });
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_gatt_read_test_mult)
+TEST_CASE_SELF(ble_gatt_read_test_mult)
 {
     uint8_t data512[512];
     int i;
@@ -749,9 +755,11 @@ TEST_CASE(ble_gatt_read_test_mult)
         }, {
             0
         } });
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_gatt_read_test_concurrent)
+TEST_CASE_SELF(ble_gatt_read_test_concurrent)
 {
     int rc;
     int i;
@@ -806,9 +814,11 @@ TEST_CASE(ble_gatt_read_test_concurrent)
         TEST_ASSERT(memcmp(ble_gatt_read_test_attrs[i].value, attrs[i].value,
                            attrs[i].value_len) == 0);
     }
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_gatt_read_test_long_oom)
+TEST_CASE_SELF(ble_gatt_read_test_long_oom)
 {
     static const struct ble_hs_test_util_flat_attr attr = {
         .handle = 34,
@@ -898,24 +908,16 @@ TEST_CASE(ble_gatt_read_test_long_oom)
     TEST_ASSERT(ble_gatt_read_test_attrs[0].value_len == attr.value_len);
     TEST_ASSERT(memcmp(ble_gatt_read_test_attrs[0].value, attr.value,
                        ble_gatt_read_test_attrs[0].value_len) == 0);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
 TEST_SUITE(ble_gatt_read_test_suite)
 {
-    tu_suite_set_post_test_cb(ble_hs_test_util_post_test, NULL);
-
     ble_gatt_read_test_by_handle();
     ble_gatt_read_test_by_uuid();
     ble_gatt_read_test_long();
     ble_gatt_read_test_mult();
     ble_gatt_read_test_concurrent();
     ble_gatt_read_test_long_oom();
-}
-
-int
-ble_gatt_read_test_all(void)
-{
-    ble_gatt_read_test_suite();
-
-    return tu_any_failed;
 }

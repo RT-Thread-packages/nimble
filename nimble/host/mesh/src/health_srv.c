@@ -6,13 +6,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "syscfg/syscfg.h"
+#define MESH_LOG_MODULE BLE_MESH_MODEL_LOG
+
 #include <string.h>
 #include <errno.h>
 #include <stdbool.h>
-
-#include "syscfg/syscfg.h"
-#define BT_DBG_ENABLED (MYNEWT_VAL(BLE_MESH_DEBUG_MODEL))
-#include "host/ble_hs_log.h"
 
 #include "mesh/mesh.h"
 #include "mesh_priv.h"
@@ -28,11 +27,11 @@
 struct bt_mesh_health_srv *health_srv;
 
 static void health_get_registered(struct bt_mesh_model *mod,
-				  u16_t company_id,
+				  uint16_t company_id,
 				  struct os_mbuf *msg)
 {
 	struct bt_mesh_health_srv *srv = mod->user_data;
-	u8_t *test_id;
+	uint8_t *test_id;
 
 	BT_DBG("Company ID 0x%04x", company_id);
 
@@ -42,7 +41,7 @@ static void health_get_registered(struct bt_mesh_model *mod,
 	net_buf_simple_add_le16(msg, company_id);
 
 	if (srv->cb && srv->cb->fault_get_reg) {
-		u8_t fault_count = net_buf_simple_tailroom(msg) - 4;
+		uint8_t fault_count = net_buf_simple_tailroom(msg) - 4;
 		int err;
 
 		err = srv->cb->fault_get_reg(mod, company_id, test_id,
@@ -65,9 +64,9 @@ static size_t health_get_current(struct bt_mesh_model *mod,
 {
 	struct bt_mesh_health_srv *srv = mod->user_data;
 	const struct bt_mesh_comp *comp;
-	u8_t *test_id, *company_ptr;
-	u16_t company_id;
-	u8_t fault_count;
+	uint8_t *test_id, *company_ptr;
+	uint16_t company_id;
+	uint8_t fault_count;
 	int err;
 
 	bt_mesh_model_msg_init(msg, OP_HEALTH_CURRENT_STATUS);
@@ -105,7 +104,7 @@ static void health_fault_get(struct bt_mesh_model *model,
 			     struct os_mbuf *buf)
 {
 	struct os_mbuf *sdu = NET_BUF_SIMPLE(BT_MESH_TX_SDU_MAX);
-	u16_t company_id;
+	uint16_t company_id;
 
 	company_id = net_buf_simple_pull_le16(buf);
 
@@ -125,7 +124,7 @@ static void health_fault_clear_unrel(struct bt_mesh_model *model,
 				     struct os_mbuf *buf)
 {
 	struct bt_mesh_health_srv *srv = model->user_data;
-	u16_t company_id;
+	uint16_t company_id;
 
 	company_id = net_buf_simple_pull_le16(buf);
 
@@ -142,7 +141,7 @@ static void health_fault_clear(struct bt_mesh_model *model,
 {
 	struct os_mbuf *sdu = NET_BUF_SIMPLE(BT_MESH_TX_SDU_MAX);
 	struct bt_mesh_health_srv *srv = model->user_data;
-	u16_t company_id;
+	uint16_t company_id;
 
 	company_id = net_buf_simple_pull_le16(buf);
 
@@ -166,8 +165,8 @@ static void health_fault_test_unrel(struct bt_mesh_model *model,
 				    struct os_mbuf *buf)
 {
 	struct bt_mesh_health_srv *srv = model->user_data;
-	u16_t company_id;
-	u8_t test_id;
+	uint16_t company_id;
+	uint8_t test_id;
 
 	test_id = net_buf_simple_pull_u8(buf);
 	company_id = net_buf_simple_pull_le16(buf);
@@ -185,8 +184,8 @@ static void health_fault_test(struct bt_mesh_model *model,
 {
 	struct os_mbuf *sdu = NET_BUF_SIMPLE(BT_MESH_TX_SDU_MAX);
 	struct bt_mesh_health_srv *srv = model->user_data;
-	u16_t company_id;
-	u8_t test_id;
+	uint16_t company_id;
+	uint8_t test_id;
 
 	BT_DBG("");
 
@@ -218,10 +217,9 @@ done:
 static void send_attention_status(struct bt_mesh_model *model,
 				  struct bt_mesh_msg_ctx *ctx)
 {
-	/* Needed size: opcode (2 bytes) + msg + MIC */
-	struct os_mbuf *msg = NET_BUF_SIMPLE(2 + 1 + 4);
+	struct os_mbuf *msg = BT_MESH_MODEL_BUF(OP_ATTENTION_STATUS, 1);
 	struct bt_mesh_health_srv *srv = model->user_data;
-	u8_t time;
+	uint8_t time;
 
 	time = k_delayed_work_remaining_get(&srv->attn_timer) / 1000;
 	BT_DBG("%u second%s", time, (time == 1) ? "" : "s");
@@ -250,7 +248,7 @@ static void attention_set_unrel(struct bt_mesh_model *model,
 				struct bt_mesh_msg_ctx *ctx,
 				struct os_mbuf *buf)
 {
-	u8_t time;
+	uint8_t time;
 
 	time = net_buf_simple_pull_u8(buf);
 
@@ -273,8 +271,7 @@ static void attention_set(struct bt_mesh_model *model,
 static void send_health_period_status(struct bt_mesh_model *model,
 				      struct bt_mesh_msg_ctx *ctx)
 {
-	/* Needed size: opcode (2 bytes) + msg + MIC */
-	struct os_mbuf *msg = NET_BUF_SIMPLE(2 + 1 + 4);
+	struct os_mbuf *msg = BT_MESH_MODEL_BUF(OP_HEALTH_PERIOD_STATUS, 1);
 
 	bt_mesh_model_msg_init(msg, OP_HEALTH_PERIOD_STATUS);
 
@@ -300,7 +297,7 @@ static void health_period_set_unrel(struct bt_mesh_model *model,
 				    struct bt_mesh_msg_ctx *ctx,
 				    struct os_mbuf *buf)
 {
-	u8_t period;
+	uint8_t period;
 
 	period = net_buf_simple_pull_u8(buf);
 	if (period > 15) {
@@ -347,8 +344,10 @@ static int health_pub_update(struct bt_mesh_model *mod)
 	BT_DBG("");
 
 	count = health_get_current(mod, pub->msg);
-	if (!count) {
-		pub->period_div = 0;
+	if (count) {
+		pub->fast_period = 1U;
+	} else {
+		pub->fast_period = 0U;
 	}
 
 	return 0;
@@ -363,6 +362,15 @@ int bt_mesh_fault_update(struct bt_mesh_elem *elem)
 		return -EINVAL;
 	}
 
+	/* Let periodic publishing, if enabled, take care of sending the
+	 * Health Current Status.
+	 */
+	if (bt_mesh_model_pub_period_get(mod)) {
+		return 0;
+	}
+
+	health_pub_update(mod);
+
 	return bt_mesh_model_publish(mod);
 }
 
@@ -376,15 +384,11 @@ static void attention_off(struct ble_npl_event *work)
 	}
 }
 
-int bt_mesh_health_srv_init(struct bt_mesh_model *model, bool primary)
+static int health_srv_init(struct bt_mesh_model *model)
 {
 	struct bt_mesh_health_srv *srv = model->user_data;
 
 	if (!srv) {
-		if (!primary) {
-			return 0;
-		}
-
 		BT_ERR("No Health Server context provided");
 		return -EINVAL;
 	}
@@ -394,21 +398,25 @@ int bt_mesh_health_srv_init(struct bt_mesh_model *model, bool primary)
 		return -EINVAL;
 	}
 
-	model->pub->update = health_pub_update,
+	model->pub->update = health_pub_update;
 
 	k_delayed_work_init(&srv->attn_timer, attention_off);
 	k_delayed_work_add_arg(&srv->attn_timer, srv);
 
 	srv->model = model;
 
-	if (primary) {
+	if (bt_mesh_model_in_primary(model)) {
 		health_srv = srv;
 	}
 
 	return 0;
 }
 
-void bt_mesh_attention(struct bt_mesh_model *model, u8_t time)
+const struct bt_mesh_model_cb bt_mesh_health_srv_cb = {
+	.init = health_srv_init,
+};
+
+void bt_mesh_attention(struct bt_mesh_model *model, uint8_t time)
 {
 	struct bt_mesh_health_srv *srv;
 
