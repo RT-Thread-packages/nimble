@@ -12,5 +12,6 @@
 #include <rtthread.h>
 
 #define console_printf rt_kprintf
+#define MODLOG_DFLT(ml_lvl_, ...)
 
 #endif

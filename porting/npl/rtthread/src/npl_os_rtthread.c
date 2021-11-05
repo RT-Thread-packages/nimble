@@ -24,8 +24,8 @@ void *ble_npl_get_current_task_id(void)
     return rt_thread_self();
 }
 
-int ble_npl_task_init(struct ble_npl_task *t, const char *name, 
-        ble_npl_task_fn *func,void *arg, uint8_t prio, 
+int ble_npl_task_init(struct ble_npl_task *t, const char *name,
+        ble_npl_task_fn *func,void *arg, uint8_t prio,
         uint32_t sanity_itvl, uint32_t *stack_bottom, uint16_t stack_size)
 {
     rt_thread_t tid;
@@ -59,6 +59,9 @@ struct ble_npl_event *ble_npl_eventq_get(struct ble_npl_eventq *evq, ble_npl_tim
     return ev;
 }
 
+#ifdef PKG_USING_BLUETRUM_SDK
+RT_SECTION(".com_text")
+#endif
 void ble_npl_eventq_put(struct ble_npl_eventq *evq, struct ble_npl_event *ev)
 {
     int ret;
@@ -307,6 +310,9 @@ void ble_npl_hw_exit_critical(uint32_t ctx)
     rt_hw_interrupt_enable(ctx);
 }
 
+#ifdef PKG_USING_BLUETRUM_SDK
+RT_SECTION(".com_text") __attribute__((noinline))
+#endif
 static void os_callout_timer_cb(void *parameter)
 {
     struct ble_npl_callout *co;
