@@ -147,6 +147,11 @@ if GetDepend(['PKG_NIMBLE_CTLR']):
         nimble/controller/src/ble_ll_scan.c
         nimble/controller/src/ble_ll_dtm.c
         nimble/controller/src/ble_ll_hci_ev.c
+        nimble/controller/src/ble_ll_iso.c
+        nimble/controller/src/ble_ll_rfmgmt.c
+        nimble/controller/src/ble_ll_scan_aux.c
+        nimble/controller/src/ble_ll_sync.c
+        nimble/controller/src/ble_ll_utils.c
         porting/nimble/src/os_cputime.c
         porting/nimble/src/os_cputime_pwr2.c
         porting/nimble/src/hal_timer.c

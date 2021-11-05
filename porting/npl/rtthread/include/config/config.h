@@ -9,6 +9,9 @@
 #define __NUMBLE_CONFIG_H__
 
 #include <rtconfig.h>
+#include "os/util.h"
+#include "console/console.h"
+
 
 /**
  * Bluetooth role support

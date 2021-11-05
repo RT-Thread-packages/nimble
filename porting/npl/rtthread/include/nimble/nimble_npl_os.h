@@ -67,4 +67,11 @@ static inline bool ble_npl_os_started(void)
     return 1;
 }
 
+static inline bool
+ble_npl_hw_is_in_critical(void)
+{
+    extern volatile uint8_t rt_interrupt_nest;
+    return rt_interrupt_nest ? true : false;
+}
+
 #endif  /* _NPL_H_ */
