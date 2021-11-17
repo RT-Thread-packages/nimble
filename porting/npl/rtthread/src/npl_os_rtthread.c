@@ -302,12 +302,13 @@ void ble_npl_time_delay(ble_npl_time_t ticks)
 
 uint32_t ble_npl_hw_enter_critical(void)
 {
-    return rt_hw_interrupt_disable();
+    rt_interrupt_enter();
+    return 0;
 }
 
 void ble_npl_hw_exit_critical(uint32_t ctx)
 {
-    rt_hw_interrupt_enable(ctx);
+    rt_interrupt_leave();
 }
 
 #ifdef PKG_USING_BLUETRUM_SDK
