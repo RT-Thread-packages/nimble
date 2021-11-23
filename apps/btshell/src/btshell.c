@@ -1766,6 +1766,7 @@ btshell_sec_restart(uint16_t conn_handle,
     struct ble_store_key_sec key_sec;
     struct ble_gap_conn_desc desc;
     ble_hs_conn_flags_t conn_flags;
+    uint8_t key_size;
     int rc;
 
     if (ltk == NULL) {
@@ -1791,13 +1792,14 @@ btshell_sec_restart(uint16_t conn_handle,
             return rc;
         }
 
+        key_size = value_sec.key_size;
         ltk = value_sec.ltk;
         ediv = value_sec.ediv;
         rand_val = value_sec.rand_num;
         auth = value_sec.authenticated;
     }
 
-    rc = ble_gap_encryption_initiate(conn_handle, ltk, ediv, rand_val, auth);
+    rc = ble_gap_encryption_initiate(conn_handle, key_size, ltk, ediv, rand_val, auth);
     return rc;
 }
 
