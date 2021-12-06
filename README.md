@@ -1,170 +1,164 @@
-<!--
-#
-# Licensed to the Apache Software Foundation (ASF) under one
-# or more contributor license agreements.  See the NOTICE file
-# distributed with this work for additional information
-# regarding copyright ownership.  The ASF licenses this file
-# to you under the Apache License, Version 2.0 (the
-# "License"); you may not use this file except in compliance
-# with the License.  You may obtain a copy of the License at
-#
-# http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing,
-# software distributed under the License is distributed on an
-# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-#  KIND, either express or implied.  See the License for the
-# specific language governing permissions and limitations
-# under the License.
-#
--->
+# 1 介绍
 
-<img src="http://mynewt.apache.org/img/logo.svg" width="250" alt="Apache Mynewt">
+NimBLE 软件包是 RT-Thread 基于 [Apache NimBLE](https://github.com/apache/mynewt-nimble) 开源蓝牙 5.0 协议栈的移植实现，该协议栈提供完整的 Host 层和 Controller 层支持，目前支持 Nordic nRF51 和 nRF52 系列芯片。
 
-## Overview
+## 1.1 主要特性
 
-Apache NimBLE is an open-source Bluetooth 5.1 stack (both Host & Controller)
-that completely replaces the proprietary SoftDevice on Nordic chipsets. It is
-part of [Apache Mynewt project](https://github.com/apache/mynewt-core).
+- 扩展广播(LE Advertising Extensions)
+- 2Mbit/s比特率的物理层
+- 长距离编码(Coded PHY for LE Long Range)
+- 高速不可连接广播(High Duty Cycle Non-Connectable Advertising)
+- 新的跳频算法(Channel Selection Algorithm #2)
+- 隐私1.2(LE Privacy 1.2)
+- 安全管理(SM),支持传统配对(LE Legacy Pairing),安全连接(LE Secure Connections),特定秘钥分发(Transport Specific Key Distribution)
+- 链路层PDU数据长度扩展(LE Data Length Extension)
+- 多角色并发(主机(central)/从机(peripheral), server/client)
+- 同时广播和扫描
+- 低速定向广播(Low Duty Cycle Directed Advertising)
+- 连接参数请求(Connection parameters request procedure)
+- LE Ping
+- 完整的GATT客户端，服务端，以及子功能
+- 抽象HCI接口层
 
-Features highlight:
-  - Support for 251 byte packet size
-  - Support for all 4 roles concurrently - Broadcaster, Observer, Peripheral and Central
-  - Support for up to 32 simultaneous connections.
-  - Legacy and SC (secure connections) SMP support (pairing and bonding).
-  - Advertising Extensions.
-  - Periodic Advertising.
-  - Coded (aka Long Range) and 2M PHYs.
-  - Bluetooth Mesh.
+## 1.2 Profile和Service支持
 
-## Supported hardware
+- 警报通知服务(ANS)
+- 即时报警服务(IAS)
+- 链路丢失服务(LLS)
+- 电池服务(BAS)
+- 设备信息服务(DIS)
+- 心率服务(HRS)
+- 自行车速度及步调(CSC)
+- 射频功率(TPS)
 
-Controller supports Nordic nRF51 and nRF52 chipsets. Host runs on any board
-and architecture [supported](https://github.com/apache/mynewt-core#overview)
-by Apache Mynewt OS.
+## 1.3 Mesh 特性
 
+- 广播和GATT承载(Advertising and GATT bearers)
+- PB-GATT 和 PB-ADV provisioning
+- 模型层(Foundation Models (server role))
+- 支持中继(Relay support)
+- 支持GATT代理(GATT Proxy)
 
-## Browsing
+更多关于 NimBLE Stack 的介绍请参考 ``http://mynewt.apache.org/latest/network/docs/index.html``。
 
-If you are browsing around the source tree, and want to see some of the
-major functional chunks, here are a few pointers:
+## 1.4  目录结构
 
-- nimble/controller: Contains code for controller including Link Layer and HCI implementation
-([controller](https://github.com/apache/mynewt-nimble/tree/master/nimble/controller))
+```
+NimBLE
+   ├───apps                   /* Bluetooth 示例应用程序 */
+   │   ├───blecent
+   │   ├───blecsc
+   │   ├───blehci
+   │   ├───blehr
+   │   ├───blemesh
+   │   ├───blemesh_light
+   │   ├───blemesh_shell
+   │   ├───bleprph
+   │   ├───bleuart
+   │   ├───btshell
+   │   ├───ext_advertiser
+   │   └───ibeacon
+   ├───docs                   /* 官方文档及 API 说明 */
+   ├───ext
+   │   └───tinycrypt          /* Tinycrypt 加密库 */
+   ├───nimble
+   │   ├───controller         /* Controller 实现 */
+   │   │   ├───include
+   │   │   └───src
+   │   ├───drivers            /* Nordic 系列 Phy 驱动 */
+   │   │   ├───nrf51
+   │   │   └───nrf52
+   │   ├───host               /* Host Stack(主机控制器)实现 */
+   │   │   ├───include
+   │   │   ├───mesh           /* Mesh 组网功能 */
+   │   │   ├───pts            /* PTS 测试相关 */
+   │   │   ├───services       /* 通用的 Profile */
+   │   │   │   ├───ans
+   │   │   │   ├───bas
+   │   │   │   ├───bleuart
+   │   │   │   ├───dis
+   │   │   │   ├───gap
+   │   │   │   ├───gatt
+   │   │   │   ├───ias
+   │   │   │   ├───lls
+   │   │   │   └───tps
+   │   │   ├───src
+   │   │   ├───store
+   │   │   ├───tools
+   │   │   └───util
+   │   ├───include
+   │   │   └───nimble
+   │   ├───src
+   │   └───transport          /* HCI 传输抽象层 */
+   │       ├───emspi
+   │       ├───ram
+   │       ├───socket
+   │       └───uart
+   └───porting                /* OS 抽象层及系统配置 */
+       ├───nimble
+       │   ├───include
+       │   └───src
+       └───npl
+           └───rtthread       /* RT-Thread OS 接口实现 */
+               ├───include
+               │   ├───config /* NimBLE 协议栈配置选项 */
+               │   ├───console
+               │   └───nimble
+               └───src
+```
 
-- nimble/drivers: Contains drivers for supported radio transceivers (Nordic nRF51 and nRF52)
-([drivers](https://github.com/apache/mynewt-nimble/tree/master/nimble/drivers))
+## 1.5 许可证
 
-- nimble/host: Contains code for host subsystem. This includes protocols like
-L2CAP and ATT, support for HCI commands and events, Generic Access Profile (GAP),
-Generic Attribute Profile (GATT) and Security Manager (SM).
-([host](https://github.com/apache/mynewt-nimble/tree/master/nimble/host))
+NimBLE 软件包遵循 Apache-2.0 许可，详见 LICENSE 文件。
 
-- nimble/host/mesh: Contains code for Bluetooth Mesh subsystem.
-([mesh](https://github.com/apache/mynewt-nimble/tree/master/nimble/host/mesh))
+## 1.6 依赖
 
-- nimble/transport: Contains code for supported transport protocols between host
-and controller. This includes UART, emSPI and RAM (used in combined build when
-host and controller run on same CPU)
-([transport](https://github.com/apache/mynewt-nimble/tree/master/nimble/transport))
+- RT_Thread 3.0+
 
-- porting: Contains implementation of NimBLE Porting Layer (NPL) for supported
-operating systems
-([porting](https://github.com/apache/mynewt-nimble/tree/master/porting))
+## 2 获取软件包
 
-- ext: Contains external libraries used by NimBLE. Those are used if not
-provided by OS
-([ext](https://github.com/apache/mynewt-nimble/tree/master/ext))
+使用 NimBLE 软件包需要在 RT-Thread 的包管理中选中它，具体路径如下：
 
-- kernel: Contains the core of the RTOS ([kernel/os](https://github.com/apache/mynewt-core/tree/master/kernel/os))
+```
+RT-Thread online packages
+    IoT - internet of things  --->
+--- NimBLE:An open-source Bluetooth 5.0 stack porting on RT-Thread
+      Bluetooth Role support  --->      
+      Host Stack Configuration  --->
+      Controller Configuration  --->
+      Bluetooth Mesh support  --->
+      HCI Transport support  ----
+      Device Driver support  ----
+      Log level (INFO)  --->
+      Bluetooth Samples (Not enable sample)  --->
+(1)   Maximum number of concurrent connections
+[*]   Device Whitelist Support
+(0)   The number of multi-advertising instances
+[ ]   Extended Advertising Feature Support
+      Version (latest)  --->
 
-## Sample Applications
+```
 
-There are also some sample applications that show how to Apache Mynewt NimBLE
-stack. These sample applications are located in the `apps/` directory of
-Apache Mynewt [repo](https://github.com/apache/mynewt-core). Some examples:
+**Bluetooth Role support**  ：  配置 BLE角色支持(Central/Peripheral/Broadcaster/Observer) ；   
+**Host Stack Configuration**  ：  配置 Host 相关功能；   
+**Controller Configuration**  ：  配置 Controller 相关功能；   
+**Bluetooth Mesh support**  ：  Mesh 特性支持及配置；   
+**HCI Transport support** ： 配置HCI层传输方式   
+**Device Driver support ** ： 底层 SOC Phy 支持   
+**Log level (INFO)**  ：  配置协议栈日志等级；   
+**Bluetooth Samples**  ：  配置示例应用；   
+**Version**  ：  软件包版本选择；   
 
-* [blecent](https://github.com/apache/mynewt-nimble/tree/master/apps/blecent):
-A basic central device with no user interface.  This application scans for
-a peripheral that supports the alert notification service (ANS). Upon
-discovering such a peripheral, blecent connects and performs a characteristic
-read, characteristic write, and notification subscription.
-* [blehci](https://github.com/apache/mynewt-nimble/tree/master/apps/blehci):
-Implements a BLE controller-only application.  A separate host-only
-implementation, such as Linux's BlueZ, can interface with this application via
-HCI over UART.
-* [bleprph](https://github.com/apache/mynewt-nimble/tree/master/apps/bleprph): An
-  implementation of a minimal BLE peripheral.
-* [btshell](https://github.com/apache/mynewt-nimble/tree/master/apps/btshell): A
-  shell-like application allowing to configure and use most of NimBLE
-  functionality from command line.
-* [bleuart](https://github.com/apache/mynewt-core/tree/master/apps/bleuart):
-Implements a simple BLE peripheral that supports the Nordic
-UART / Serial Port Emulation service
-(https://developer.nordicsemi.com/nRF5_SDK/nRF51_SDK_v8.x.x/doc/8.0.0/s110/html/a00072.html).
+配置完成后让 RT-Thread 的包管理器自动更新，或者使用 pkgs --update 命令更新包到 BSP 中。
 
-# Getting Help
+## 3 使用 NimBLE 软件包
 
-If you are having trouble using or contributing to Apache Mynewt NimBLE, or just
-want to talk to a human about what you're working on, you can contact us via the
-[developers mailing list](mailto:dev@mynewt.apache.org).
+配合独立的 nrf52832-nimble bsp 使用，参考 https://github.com/EvalZero/nrf52832-nimble 。
 
-Although not a formal channel, you can also find a number of core developers
-on the #mynewt channel on Freenode IRC or #general channel on [Mynewt Slack](https://mynewt.slack.com/join/shared_invite/enQtNjA1MTg0NzgyNzg3LTcyMmZiOGQzOGMxM2U4ODFmMTIwNjNmYTE5Y2UwYjQwZWIxNTE0MTUzY2JmMTEzOWFjYWZkNGM0YmM4MzAxNWQ)
+## 4 注意事项
+- NimBLE 当前处于开发阶段，暂时只支持 Nodic nRF52832 MCU，参见 [nrf52832-bsp](https://github.com/EvalZero/nrf52832-nimble)
 
-Also, be sure to checkout the [Frequently Asked Questions](https://mynewt.apache.org/faq/answers)
-for some help troubleshooting first.
+## 5、联系方式 & 感谢
 
-# Contributing
-
-Anybody who works with Apache Mynewt can be a contributing member of the
-community that develops and deploys it.  The process of releasing an operating
-system for microcontrollers is never done: and we welcome your contributions
-to that effort.
-
-More information can be found at the Community section of the Apache Mynewt
-website, located [here](https://mynewt.apache.org/community).
-
-## Pull Requests
-
-Apache Mynewt welcomes pull request via Github.  Discussions are done on Github,
-but depending on the topic, can also be relayed to the official Apache Mynewt
-developer mailing list dev@mynewt.apache.org.
-
-If you are suggesting a new feature, please email the developer list directly,
-with a description of the feature you are planning to work on.
-
-## Filing Bugs
-
-Bugs can be filed on the
-[Apache Mynewt NimBLE Issues](https://github.com/apache/mynewt-nimble/issues).
-Please label the issue as a "Bug".
-
-Where possible, please include a self-contained reproduction case!
-
-## Feature Requests
-
-Feature requests should also be filed on the
-[Apache Mynewt NimBLE Bug Tracker](https://github.com/apache/mynewt-nimble/issues).
-Please label the issue as a "Feature" or "Enhancement" depending on the scope.
-
-## Writing Tests
-
-We love getting newt tests!  Apache Mynewt is a huge undertaking, and improving
-code coverage is a win for every Apache Mynewt user.
-
-<!--
-TODO
-## Writing Documentation
-
-Contributing to documentation (in addition to writing tests), is a great way
-to get involved with the Apache Mynewt project.
-
- The Mynewt NimBLE documentation is found in [/docs](/docs).
--->
-
-# License
-
-The code in this repository is all under either the Apache 2 license, or a
-license compatible with the Apache 2 license.  See the LICENSE file for more
-information.
+- 维护：RT-Thread 开发团队
+- 主页：https://github.com/RT-Thread-packages/nimble
