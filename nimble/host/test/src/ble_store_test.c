@@ -18,7 +18,7 @@
  */
 
 #include "testutil/testutil.h"
-#include "host/ble_hs_test.h"
+#include "ble_hs_test.h"
 #include "ble_hs_test_util.h"
 
 static struct ble_store_status_event ble_store_test_status_event;
@@ -125,7 +125,7 @@ ble_store_test_util_count(int obj_type)
     return count;
 }
 
-TEST_CASE(ble_store_test_peers)
+TEST_CASE_SELF(ble_store_test_peers)
 {
     struct ble_store_value_sec secs[3] = {
         {
@@ -164,9 +164,11 @@ TEST_CASE(ble_store_test_peers)
     for (i = 0; i < num_addrs; i++) {
         TEST_ASSERT(ble_addr_cmp(&peer_addrs[i], &secs[i].peer_addr) == 0);
     }
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_store_test_delete_peer)
+TEST_CASE_SELF(ble_store_test_delete_peer)
 {
     struct ble_store_value_sec secs[2] = {
         {
@@ -258,9 +260,11 @@ TEST_CASE(ble_store_test_delete_peer)
 
     /* Ensure all traces of first peer have been removed. */
     ble_store_test_util_verify_peer_deleted(&secs[1].peer_addr);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_store_test_count)
+TEST_CASE_SELF(ble_store_test_count)
 {
     struct ble_store_value_sec secs[4] = {
         {
@@ -337,15 +341,19 @@ TEST_CASE(ble_store_test_count)
     rc = ble_store_util_count(BLE_STORE_OBJ_TYPE_CCCD, &count);
     TEST_ASSERT_FATAL(rc == 0);
     TEST_ASSERT(count == 1);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_store_test_overflow)
+TEST_CASE_SELF(ble_store_test_overflow)
 {
     ble_store_test_util_overflow_sec(0);
     ble_store_test_util_overflow_sec(1);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_store_test_clear)
+TEST_CASE_SELF(ble_store_test_clear)
 {
     const struct ble_store_value_sec secs[2] = {
         {
@@ -413,23 +421,15 @@ TEST_CASE(ble_store_test_clear)
     TEST_ASSERT(ble_store_test_util_count(BLE_STORE_OBJ_TYPE_OUR_SEC) == 0);
     TEST_ASSERT(ble_store_test_util_count(BLE_STORE_OBJ_TYPE_PEER_SEC) == 0);
     TEST_ASSERT(ble_store_test_util_count(BLE_STORE_OBJ_TYPE_CCCD) == 0);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
 TEST_SUITE(ble_store_suite)
 {
-    tu_suite_set_post_test_cb(ble_hs_test_util_post_test, NULL);
-
     ble_store_test_peers();
     ble_store_test_delete_peer();
     ble_store_test_count();
     ble_store_test_overflow();
     ble_store_test_clear();
-}
-
-int
-ble_store_test_all(void)
-{
-    ble_store_suite();
-
-    return tu_any_failed;
 }

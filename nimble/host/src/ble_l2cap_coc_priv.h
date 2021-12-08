@@ -30,17 +30,19 @@
 extern "C" {
 #endif
 
-#define BLE_L2CAP_COC_MTU                       100
 #define BLE_L2CAP_COC_CID_START                 0x0040
 #define BLE_L2CAP_COC_CID_END                   0x007F
 
 struct ble_l2cap_chan;
 
+#define BLE_L2CAP_COC_FLAG_STALLED              0x01
+
 struct ble_l2cap_coc_endpoint {
+    struct os_mbuf *sdu;
     uint16_t mtu;
     uint16_t credits;
     uint16_t data_offset;
-    struct os_mbuf *sdu;
+    uint8_t flags;
 };
 
 struct ble_l2cap_coc_srv {
@@ -55,25 +57,46 @@ struct ble_l2cap_coc_srv {
 int ble_l2cap_coc_init(void);
 int ble_l2cap_coc_create_server(uint16_t psm, uint16_t mtu,
                                 ble_l2cap_event_fn *cb, void *cb_arg);
-int ble_l2cap_coc_create_srv_chan(uint16_t conn_handle, uint16_t psm,
+int ble_l2cap_coc_create_srv_chan(struct ble_hs_conn *conn, uint16_t psm,
                                   struct ble_l2cap_chan **chan);
-struct ble_l2cap_chan * ble_l2cap_coc_chan_alloc(uint16_t conn_handle,
+struct ble_l2cap_chan * ble_l2cap_coc_chan_alloc(struct ble_hs_conn *conn,
                                                  uint16_t psm, uint16_t mtu,
                                                  struct os_mbuf *sdu_rx,
                                                  ble_l2cap_event_fn *cb,
                                                  void *cb_arg);
-void ble_l2cap_coc_cleanup_chan(struct ble_l2cap_chan *chan);
+void ble_l2cap_coc_cleanup_chan(struct ble_hs_conn *conn, struct ble_l2cap_chan *chan);
 void ble_l2cap_coc_le_credits_update(uint16_t conn_handle, uint16_t dcid,
                                     uint16_t credits);
-void ble_l2cap_coc_recv_ready(struct ble_l2cap_chan *chan,
-                              struct os_mbuf *sdu_rx);
+int ble_l2cap_coc_recv_ready(struct ble_l2cap_chan *chan,
+                             struct os_mbuf *sdu_rx);
 int ble_l2cap_coc_send(struct ble_l2cap_chan *chan, struct os_mbuf *sdu_tx);
+void ble_l2cap_coc_set_new_mtu_mps(struct ble_l2cap_chan *chan, uint16_t mtu, uint16_t mps);
 #else
-#define ble_l2cap_coc_init()                                    0
-#define ble_l2cap_coc_create_server(psm, mtu, cb, cb_arg)       BLE_HS_ENOTSUP
-#define ble_l2cap_coc_recv_ready(chan, sdu_rx)
-#define ble_l2cap_coc_cleanup_chan(chan)
-#define ble_l2cap_coc_send(chan, sdu_tx)                        BLE_HS_ENOTSUP
+static inline int
+ble_l2cap_coc_init(void) {
+    return 0;
+}
+
+static inline int
+ble_l2cap_coc_create_server(uint16_t psm, uint16_t mtu,
+                            ble_l2cap_event_fn *cb, void *cb_arg) {
+    return BLE_HS_ENOTSUP;
+}
+
+static inline int
+ble_l2cap_coc_recv_ready(struct ble_l2cap_chan *chan,
+                         struct os_mbuf *sdu_rx) {
+    return BLE_HS_ENOTSUP;
+}
+
+static inline void
+ble_l2cap_coc_cleanup_chan(struct ble_hs_conn *conn, struct ble_l2cap_chan *chan) {
+}
+
+static inline int
+ble_l2cap_coc_send(struct ble_l2cap_chan *chan, struct os_mbuf *sdu_tx) {
+    return BLE_HS_ENOTSUP;
+}
 #endif
 
 #ifdef __cplusplus

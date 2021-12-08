@@ -38,7 +38,6 @@ src += Split('''
     nimble/host/src/ble_hs.c
     nimble/host/src/ble_hs_cfg.c
     nimble/host/src/ble_hs_conn.c
-    nimble/host/src/ble_hs_dbg.c
     nimble/host/src/ble_hs_flow.c
     nimble/host/src/ble_hs_hci.c
     nimble/host/src/ble_hs_hci_cmd.c
@@ -49,6 +48,7 @@ src += Split('''
     nimble/host/src/ble_hs_mbuf.c
     nimble/host/src/ble_hs_mqueue.c
     nimble/host/src/ble_hs_misc.c
+    nimble/host/src/ble_hs_periodic_sync.c
     nimble/host/src/ble_hs_pvcy.c
     nimble/host/src/ble_hs_startup.c
     nimble/host/src/ble_hs_stop.c
@@ -68,7 +68,7 @@ src += Split('''
     nimble/host/src/ble_uuid.c
     nimble/host/services/ans/src/ble_svc_ans.c
     nimble/host/services/bas/src/ble_svc_bas.c
-    nimble/host/services/bleuart/src/ble_svc_uart.c
+    nimble/host/services/bleuart/src/bleuart.c
     nimble/host/services/gap/src/ble_svc_gap.c
     nimble/host/services/gatt/src/ble_svc_gatt.c
     nimble/host/services/ias/src/ble_svc_ias.c
@@ -76,7 +76,6 @@ src += Split('''
     nimble/host/services/tps/src/ble_svc_tps.c
     nimble/host/store/ram/src/ble_store_ram.c
     nimble/host/util/src/addr.c
-    nimble/src/ble_util.c
     ''')
 
 # Few utils and data structures copied from Mynewt
@@ -90,7 +89,6 @@ src += Split('''
     porting/nimble/src/os_mbuf.c
     porting/nimble/src/os_mempool.c
     porting/nimble/src/os_msys_init.c
-    porting/npl/rtthread/src/modlog.c
     porting/npl/rtthread/src/nimble_port_rtthread.c
     porting/npl/rtthread/src/npl_os_rtthread.c
     porting/npl/rtthread/src/npl_shell.c
@@ -136,7 +134,6 @@ if GetDepend(['PKG_NIMBLE_CTLR']):
     src += Split("""
         nimble/transport/ram/src/ble_hci_ram.c
         nimble/controller/src/ble_ll_sched.c
-        nimble/controller/src/ble_ll_xcvr.c
         nimble/controller/src/ble_ll_whitelist.c
         nimble/controller/src/ble_ll_ctrl.c
         nimble/controller/src/ble_ll_hci.c
@@ -150,6 +147,11 @@ if GetDepend(['PKG_NIMBLE_CTLR']):
         nimble/controller/src/ble_ll_scan.c
         nimble/controller/src/ble_ll_dtm.c
         nimble/controller/src/ble_ll_hci_ev.c
+        nimble/controller/src/ble_ll_iso.c
+        nimble/controller/src/ble_ll_rfmgmt.c
+        nimble/controller/src/ble_ll_scan_aux.c
+        nimble/controller/src/ble_ll_sync.c
+        nimble/controller/src/ble_ll_utils.c
         porting/nimble/src/os_cputime.c
         porting/nimble/src/os_cputime_pwr2.c
         porting/nimble/src/hal_timer.c

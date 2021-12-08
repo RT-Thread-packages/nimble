@@ -60,6 +60,7 @@
 #include "host/ble_gap.h"
 #include "ble_hs_priv.h"
 
+#if NIMBLE_BLE_CONNECT
 /*****************************************************************************
  * $definitions / declarations                                               *
  *****************************************************************************/
@@ -485,7 +486,7 @@ ble_gattc_dbg_assert_proc_not_inserted(struct ble_gattc_proc *proc)
  *****************************************************************************/
 
 static void
-ble_gattc_log_proc_init(char *name)
+ble_gattc_log_proc_init(const char *name)
 {
     BLE_HS_LOG(INFO, "GATT procedure initiated: %s", name);
 }
@@ -587,7 +588,7 @@ ble_gattc_log_read_mult(const uint16_t *handles, uint8_t num_handles)
 static void
 ble_gattc_log_write(uint16_t att_handle, uint16_t len, int expecting_rsp)
 {
-    char *name;
+    const char *name;
 
     if (expecting_rsp) {
         name = "write; ";
@@ -697,12 +698,16 @@ ble_gattc_proc_free(struct ble_gattc_proc *proc)
 
         switch (proc->op) {
         case BLE_GATT_OP_WRITE_LONG:
-            os_mbuf_free_chain(proc->write_long.attr.om);
+            if (MYNEWT_VAL(BLE_GATT_WRITE_LONG)) {
+                os_mbuf_free_chain(proc->write_long.attr.om);
+            }
             break;
 
         case BLE_GATT_OP_WRITE_RELIABLE:
-            for (i = 0; i < proc->write_reliable.num_attrs; i++) {
-                os_mbuf_free_chain(proc->write_reliable.attrs[i].om);
+            if (MYNEWT_VAL(BLE_GATT_WRITE_RELIABLE)) {
+                for (i = 0; i < proc->write_reliable.num_attrs; i++) {
+                    os_mbuf_free_chain(proc->write_reliable.attrs[i].om);
+                }
             }
             break;
 
@@ -912,7 +917,7 @@ ble_gattc_proc_matches_conn_rx_entry(struct ble_gattc_proc *proc, void *arg)
     criteria->matching_rx_entry = ble_gattc_rx_entry_find(
         proc->op, criteria->rx_entries, criteria->num_rx_entries);
 
-    return 1;
+    return (criteria->matching_rx_entry != NULL);
 }
 
 static void
@@ -4804,3 +4809,5 @@ ble_gattc_init(void)
 
     return 0;
 }
+
+#endif

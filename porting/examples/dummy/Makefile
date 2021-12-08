@@ -19,7 +19,7 @@
 
 # Toolchain commands
 CROSS_COMPILE ?=
-CC      := ccache $(CROSS_COMPLIE)gcc
+CC      := ccache $(CROSS_COMPILE)gcc
 CXX     := ccache $(CROSS_COMPILE)g++
 LD      := $(CROSS_COMPILE)gcc
 AR      := $(CROSS_COMPILE)ar
@@ -32,12 +32,19 @@ SIZE    := $(CROSS_COMPILE)size
 # Configure NimBLE variables
 NIMBLE_ROOT := ../../..
 NIMBLE_CFG_TINYCRYPT := 1
+
+# Skip files that don't build for this port
+NIMBLE_IGNORE := $(NIMBLE_ROOT)/nimble/host/src/ble_gatts_lcl.c \
+	$(NIMBLE_ROOT)/porting/nimble/src/hal_timer.c \
+	$(NIMBLE_ROOT)/porting/nimble/src/os_cputime.c \
+	$(NIMBLE_ROOT)/porting/nimble/src/os_cputime_pwr2.c \
+	$(NULL)
+
 include $(NIMBLE_ROOT)/porting/nimble/Makefile.defs
 
 # Add dummy NPL, dummy HCI transport and all NimBLE sources to build
 SRC = \
-	$(NIMBLE_ROOT)/porting/npl/dummy/src/npl_os_dummy.c \
-	$(NIMBLE_ROOT)/porting/npl/dummy/src/hci_dummy.c \
+	$(wildcard $(NIMBLE_ROOT)/porting/npl/dummy/src/*.c) \
 	$(NIMBLE_SRC) \
 	$(TINYCRYPT_SRC) \
 	main.c \

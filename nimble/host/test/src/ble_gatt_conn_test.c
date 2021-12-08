@@ -21,7 +21,7 @@
 #include <errno.h>
 #include "testutil/testutil.h"
 #include "nimble/ble.h"
-#include "host/ble_hs_test.h"
+#include "ble_hs_test.h"
 #include "ble_hs_test_util.h"
 
 #define BLE_GATT_BREAK_TEST_READ_ATTR_HANDLE        0x9383
@@ -202,7 +202,7 @@ ble_gatt_conn_test_disc_chr_uuid_cb(uint16_t conn_handle,
 static int
 ble_gatt_conn_test_disc_all_dscs_cb(uint16_t conn_handle,
                                     const struct ble_gatt_error *error,
-                                    uint16_t chr_def_handle,
+                                    uint16_t chr_val_handle,
                                     const struct ble_gatt_dsc *dsc,
                                     void *arg)
 {
@@ -365,7 +365,7 @@ ble_gatt_conn_test_write_rel_cb(uint16_t conn_handle,
     return 0;
 }
 
-TEST_CASE(ble_gatt_conn_test_disconnect)
+TEST_CASE_SELF(ble_gatt_conn_test_disconnect)
 {
     struct ble_gatt_conn_test_arg mtu_arg            = { 0, BLE_HS_ENOTCONN };
     struct ble_gatt_conn_test_arg disc_all_svcs_arg  = { 0, BLE_HS_ENOTCONN };
@@ -550,13 +550,14 @@ TEST_CASE(ble_gatt_conn_test_disconnect)
     TEST_ASSERT(ble_gatt_conn_test_gap_event.notify_tx.attr_handle ==
                 attr_handle);
     TEST_ASSERT(ble_gatt_conn_test_gap_event.notify_tx.indication);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
 static void
 ble_gatt_conn_test_util_timeout(uint16_t conn_handle,
                                 struct ble_gatt_conn_test_arg *arg)
 {
-    struct hci_disconn_complete evt;
     int32_t ticks_from_now;
 
     ticks_from_now = ble_gattc_timer();
@@ -572,10 +573,8 @@ ble_gatt_conn_test_util_timeout(uint16_t conn_handle,
     TEST_ASSERT(ticks_from_now == BLE_HS_FOREVER);
 
     /* Ensure connection was terminated due to proecedure timeout. */
-    evt.connection_handle = conn_handle;
-    evt.status = 0;
-    evt.reason = BLE_ERR_REM_USER_CONN_TERM;
-    ble_hs_test_util_hci_rx_disconn_complete_event(&evt);
+    ble_hs_test_util_hci_rx_disconn_complete_event(conn_handle, 0,
+                                                   BLE_ERR_REM_USER_CONN_TERM);
 
     /* Ensure GATT callback was called with timeout status. */
     if (arg != NULL) {
@@ -583,7 +582,7 @@ ble_gatt_conn_test_util_timeout(uint16_t conn_handle,
     }
 }
 
-TEST_CASE(ble_gatt_conn_test_timeout)
+TEST_CASE_SELF(ble_gatt_conn_test_timeout)
 {
     static const uint8_t peer_addr[6] = { 1, 2, 3, 4, 5, 6 };
 
@@ -736,20 +735,12 @@ TEST_CASE(ble_gatt_conn_test_timeout)
     rc = ble_gattc_indicate(1, attr_handle);
     TEST_ASSERT_FATAL(rc == 0);
     ble_gatt_conn_test_util_timeout(1, NULL);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
 TEST_SUITE(ble_gatt_conn_suite)
 {
-    tu_suite_set_post_test_cb(ble_hs_test_util_post_test, NULL);
-
     ble_gatt_conn_test_disconnect();
     ble_gatt_conn_test_timeout();
-}
-
-int
-ble_gatt_conn_test_all(void)
-{
-    ble_gatt_conn_suite();
-
-    return tu_any_failed;
 }

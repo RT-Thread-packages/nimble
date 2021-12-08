@@ -37,14 +37,17 @@
 #include "controller/ble_ll_adv.h"
 #include "controller/ble_ll_sched.h"
 #include "controller/ble_ll_scan.h"
+#include "controller/ble_ll_scan_aux.h"
 #include "controller/ble_ll_hci.h"
 #include "controller/ble_ll_whitelist.h"
 #include "controller/ble_ll_resolv.h"
-#include "controller/ble_ll_xcvr.h"
+#include "controller/ble_ll_rfmgmt.h"
 #include "controller/ble_ll_trace.h"
+#include "controller/ble_ll_sync.h"
 #include "ble_ll_conn_priv.h"
+#include "ble_ll_priv.h"
 
-#if MYNEWT_VAL(BLE_LL_DIRECT_TEST_MODE) == 1
+#if MYNEWT_VAL(BLE_LL_DTM)
 #include "ble_ll_dtm_priv.h"
 #endif
 
@@ -204,9 +207,21 @@ STATS_NAME_START(ble_ll_stats)
     STATS_NAME(ble_ll_stats, aux_scan_rsp_err)
     STATS_NAME(ble_ll_stats, aux_chain_cnt)
     STATS_NAME(ble_ll_stats, aux_chain_err)
+    STATS_NAME(ble_ll_stats, aux_scan_drop)
     STATS_NAME(ble_ll_stats, adv_evt_dropped)
     STATS_NAME(ble_ll_stats, scan_timer_stopped)
     STATS_NAME(ble_ll_stats, scan_timer_restarted)
+    STATS_NAME(ble_ll_stats, periodic_adv_drop_event)
+    STATS_NAME(ble_ll_stats, periodic_chain_drop_event)
+    STATS_NAME(ble_ll_stats, sync_event_failed)
+    STATS_NAME(ble_ll_stats, sync_received)
+    STATS_NAME(ble_ll_stats, sync_chain_failed)
+    STATS_NAME(ble_ll_stats, sync_missed_err)
+    STATS_NAME(ble_ll_stats, sync_crc_err)
+    STATS_NAME(ble_ll_stats, sync_rx_buf_err)
+    STATS_NAME(ble_ll_stats, sync_scheduled)
+    STATS_NAME(ble_ll_stats, sched_state_sync_errs)
+    STATS_NAME(ble_ll_stats, sched_invalid_pdu)
 STATS_NAME_END(ble_ll_stats)
 
 static void ble_ll_event_rx_pkt(struct ble_npl_event *ev);
@@ -217,8 +232,7 @@ static void ble_ll_event_dbuf_overflow(struct ble_npl_event *ev);
 
 /* The BLE LL task data structure */
 #if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_EXT_ADV)
-/* TODO: This is for testing. Check it we really need it */
-#define BLE_LL_STACK_SIZE   (128)
+#define BLE_LL_STACK_SIZE   (120)
 #else
 #define BLE_LL_STACK_SIZE   (90)
 #endif
@@ -284,7 +298,7 @@ ble_ll_count_rx_adv_pdus(uint8_t pdu_type)
     case BLE_ADV_PDU_TYPE_SCAN_RSP:
         STATS_INC(ble_ll_stats, rx_scan_rsps);
         break;
-    case BLE_ADV_PDU_TYPE_CONNECT_REQ:
+    case BLE_ADV_PDU_TYPE_CONNECT_IND:
         STATS_INC(ble_ll_stats, rx_connect_reqs);
         break;
     case BLE_ADV_PDU_TYPE_AUX_CONNECT_RSP:
@@ -298,66 +312,77 @@ ble_ll_count_rx_adv_pdus(uint8_t pdu_type)
     }
 }
 
-/**
- * Allocate a pdu (chain) for reception.
- *
- * @param len
- *
- * @return struct os_mbuf*
- */
 struct os_mbuf *
 ble_ll_rxpdu_alloc(uint16_t len)
 {
-    uint16_t mb_bytes;
-    struct os_mbuf *m;
-    struct os_mbuf *n;
-    struct os_mbuf *p;
+    struct os_mbuf *om_ret;
+    struct os_mbuf *om_next;
+    struct os_mbuf *om;
     struct os_mbuf_pkthdr *pkthdr;
-
-    p = os_msys_get_pkthdr(len, sizeof(struct ble_mbuf_hdr));
-    if (!p) {
-        goto rxpdu_alloc_exit;
-    }
-
-    /* Set packet length */
-    pkthdr = OS_MBUF_PKTHDR(p);
-    pkthdr->omp_len = len;
+    uint16_t databuf_len;
+    int rem_len;
 
     /*
-     * NOTE: first mbuf in chain will have data pre-pended to it so we adjust
-     * m_data by a word.
+     * Make sure that data in mbuf are word-aligned with and without packet
+     * header. This is essential for proper and quick copying of received PDUs
+     * into mbufs.
      */
-    p->om_data += 4;
-    mb_bytes = (p->om_omp->omp_databuf_len - p->om_pkthdr_len - 4);
+    _Static_assert((offsetof(struct os_mbuf, om_data) & 3) == 0,
+                   "Unaligned om_data");
+    _Static_assert(((offsetof(struct os_mbuf, om_data) +
+                     sizeof(struct os_mbuf_pkthdr) +
+                     sizeof(struct ble_mbuf_hdr)) & 3) == 0,
+                   "Unaligned data trailing packet header");
 
-    if (mb_bytes < len) {
-        n = p;
-        len -= mb_bytes;
-        while (len) {
-            m = os_msys_get(len, 0);
-            if (!m) {
-                os_mbuf_free_chain(p);
-                p = NULL;
-                goto rxpdu_alloc_exit;
-            }
-            /* Chain new mbuf to existing chain */
-            SLIST_NEXT(n, om_next) = m;
-            n = m;
-            mb_bytes = m->om_omp->omp_databuf_len;
-            if (mb_bytes >= len) {
-                len = 0;
-            } else {
-                len -= mb_bytes;
-            }
+    om_ret = os_msys_get_pkthdr(len, sizeof(struct ble_mbuf_hdr));
+    if (!om_ret) {
+        goto rxpdu_alloc_fail;
+    }
+
+    /* Set complete PDU length in packet header */
+    pkthdr = OS_MBUF_PKTHDR(om_ret);
+    pkthdr->omp_len = len;
+
+    rem_len = len;
+
+    /*
+     * Calculate length of data in memory block. We assume length is rounded
+     * down to word size so PHY can do word-size aligned data copy to mbufs
+     * (except for last one) and leave remainder unused.
+     *
+     * Note that there likely won't be any remainder here since all pools have
+     * block size aligned to word size anyway.
+     */
+    databuf_len = om_ret->om_omp->omp_databuf_len & ~3;
+
+    /*
+     * First mbuf can store less data due to packet header. Also we reserve one
+     * word for leading space to prepend header when necessary (like for data
+     * PDU before handing over to HCI)
+     */
+    om_ret->om_data += 4;
+    rem_len -= databuf_len - om_ret->om_pkthdr_len - 4;
+
+    /* Allocate and chain mbufs until there's enough space to store complete PDU */
+    om = om_ret;
+    while (rem_len > 0) {
+        om_next = os_msys_get(rem_len, 0);
+        if (!om_next) {
+            os_mbuf_free_chain(om_ret);
+            goto rxpdu_alloc_fail;
         }
+
+        SLIST_NEXT(om, om_next) = om_next;
+        om = om_next;
+
+        rem_len -= databuf_len;
     }
 
+    return om_ret;
 
-rxpdu_alloc_exit:
-    if (!p) {
-        STATS_INC(ble_ll_stats, no_bufs);
-    }
-    return p;
+rxpdu_alloc_fail:
+    STATS_INC(ble_ll_stats, no_bufs);
+    return NULL;
 }
 
 int
@@ -402,7 +427,7 @@ ble_ll_chk_txrx_time(uint16_t time)
  * @return int
  */
 int
-ble_ll_is_rpa(uint8_t *addr, uint8_t addr_type)
+ble_ll_is_rpa(const uint8_t *addr, uint8_t addr_type)
 {
     int rc;
 
@@ -414,9 +439,46 @@ ble_ll_is_rpa(uint8_t *addr, uint8_t addr_type)
     return rc;
 }
 
+int
+ble_ll_addr_is_id(uint8_t *addr, uint8_t addr_type)
+{
+    return !addr_type || ((addr[5] & 0xc0) == 0xc0);
+}
+
+int
+ble_ll_addr_subtype(const uint8_t *addr, uint8_t addr_type)
+{
+    if (!addr_type) {
+        return BLE_LL_ADDR_SUBTYPE_IDENTITY;
+    }
+
+    switch (addr[5] >> 6) {
+    case 0:
+        return BLE_LL_ADDR_SUBTYPE_NRPA; /* NRPA */
+    case 1:
+        return BLE_LL_ADDR_SUBTYPE_RPA; /* RPA */
+    default:
+        return BLE_LL_ADDR_SUBTYPE_IDENTITY; /* static random */
+    }
+}
+
+int
+ble_ll_is_valid_public_addr(const uint8_t *addr)
+{
+    int i;
+
+    for (i = 0; i < BLE_DEV_ADDR_LEN; ++i) {
+        if (addr[i]) {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
 /* Checks to see that the device is a valid random address */
 int
-ble_ll_is_valid_random_addr(uint8_t *addr)
+ble_ll_is_valid_random_addr(const uint8_t *addr)
 {
     int i;
     int rc;
@@ -457,6 +519,39 @@ ble_ll_is_valid_random_addr(uint8_t *addr)
 
     return rc;
 }
+int
+ble_ll_is_valid_own_addr_type(uint8_t own_addr_type, const uint8_t *random_addr)
+{
+    int rc;
+
+    switch (own_addr_type) {
+    case BLE_HCI_ADV_OWN_ADDR_PUBLIC:
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_PRIVACY)
+    case BLE_HCI_ADV_OWN_ADDR_PRIV_PUB:
+#endif
+        rc = ble_ll_is_valid_public_addr(g_dev_addr);
+        break;
+    case BLE_HCI_ADV_OWN_ADDR_RANDOM:
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_PRIVACY)
+    case BLE_HCI_ADV_OWN_ADDR_PRIV_RAND:
+#endif
+        rc = ble_ll_is_valid_random_addr(random_addr);
+        break;
+    default:
+        rc = 0;
+        break;
+    }
+
+    return rc;
+}
+
+int
+ble_ll_set_public_addr(const uint8_t *addr)
+{
+    memcpy(g_dev_addr, addr, BLE_DEV_ADDR_LEN);
+
+    return BLE_ERR_SUCCESS;
+}
 
 /**
  * Called from the HCI command parser when the set random address command
@@ -469,24 +564,30 @@ ble_ll_is_valid_random_addr(uint8_t *addr)
  * @return int 0: success
  */
 int
-ble_ll_set_random_addr(uint8_t *addr, bool hci_adv_ext)
+ble_ll_set_random_addr(const uint8_t *cmdbuf, uint8_t len, bool hci_adv_ext)
 {
+    const struct ble_hci_le_set_rand_addr_cp *cmd = (const void *) cmdbuf;
+
+    if (len < sizeof(*cmd)) {
+        return BLE_ERR_INV_HCI_CMD_PARMS;
+    }
+
     /* If the Host issues this command when scanning or legacy advertising is
      * enabled, the Controller shall return the error code Command Disallowed.
      *
      * Test specification extends this also to initiating.
      */
 
-    if (g_ble_ll_conn_create_sm || ble_ll_scan_enabled() ||
+    if (g_ble_ll_conn_create_sm.connsm || ble_ll_scan_enabled() ||
                                 (!hci_adv_ext && ble_ll_adv_enabled())) {
         return BLE_ERR_CMD_DISALLOWED;
     }
 
-    if (!ble_ll_is_valid_random_addr(addr)) {
+    if (!ble_ll_is_valid_random_addr(cmd->addr)) {
         return BLE_ERR_INV_HCI_CMD_PARMS;
     }
 
-    memcpy(g_random_addr, addr, BLE_DEV_ADDR_LEN);
+    memcpy(g_random_addr, cmd->addr, BLE_DEV_ADDR_LEN);
 
 #if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_EXT_ADV)
     /* For instance 0 we need same address if legacy advertising might be
@@ -494,7 +595,7 @@ ble_ll_set_random_addr(uint8_t *addr, bool hci_adv_ext)
      * affect instance 0.
      */
     if (!hci_adv_ext)
-        ble_ll_adv_set_random_addr(addr, 0);
+        ble_ll_adv_set_random_addr(cmd->addr, 0);
 #endif
 
     return BLE_ERR_SUCCESS;
@@ -577,40 +678,25 @@ ble_ll_wfr_timer_exp(void *arg)
         case BLE_LL_STATE_SCANNING:
             ble_ll_scan_wfr_timer_exp();
             break;
-        case BLE_LL_STATE_INITIATING:
-            ble_ll_conn_init_wfr_timer_exp();
-            break;
-#if MYNEWT_VAL(BLE_LL_DIRECT_TEST_MODE) == 1
+#if MYNEWT_VAL(BLE_LL_DTM)
         case BLE_LL_STATE_DTM:
             ble_ll_dtm_wfr_timer_exp();
+            break;
+#endif
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_PERIODIC_ADV)
+        case BLE_LL_STATE_SYNC:
+            ble_ll_sync_wfr_timer_exp();
+            break;
+#endif
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_EXT_ADV)
+        case BLE_LL_STATE_SCAN_AUX:
+            ble_ll_scan_aux_wfr_timer_exp();
             break;
 #endif
         default:
             break;
         }
     }
-}
-
-/**
- * Enable the wait for response timer.
- *
- * Context: Interrupt.
- *
- * @param cputime
- * @param wfr_cb
- * @param arg
- */
-void
-ble_ll_wfr_enable(uint32_t cputime)
-{
-}
-
-/**
- * Disable the wait for response timer
- */
-void
-ble_ll_wfr_disable(void)
-{
 }
 
 /**
@@ -629,6 +715,7 @@ ble_ll_tx_pkt_in(void)
     uint16_t pb;
     struct os_mbuf_pkthdr *pkthdr;
     struct os_mbuf *om;
+    os_sr_t sr;
 
     /* Drain all packets off the queue */
     while (STAILQ_FIRST(&g_ble_ll_data.ll_tx_pkt_q)) {
@@ -637,7 +724,9 @@ ble_ll_tx_pkt_in(void)
         om = (struct os_mbuf *)((uint8_t *)pkthdr - sizeof(struct os_mbuf));
 
         /* Remove from queue */
+        OS_ENTER_CRITICAL(sr);
         STAILQ_REMOVE_HEAD(&g_ble_ll_data.ll_tx_pkt_q, omp_next);
+        OS_EXIT_CRITICAL(sr);
 
         /* Strip HCI ACL header to get handle and length */
         handle = get_le16(om->om_data);
@@ -675,9 +764,11 @@ ble_ll_count_rx_stats(struct ble_mbuf_hdr *hdr, uint16_t len, uint8_t pdu_type)
     crcok = BLE_MBUF_HDR_CRC_OK(hdr);
     connection_data = (BLE_MBUF_HDR_RX_STATE(hdr) == BLE_LL_STATE_CONNECTION);
 
-#if MYNEWT_VAL(BLE_LL_DIRECT_TEST_MODE) == 1
+#if MYNEWT_VAL(BLE_LL_DTM)
     /* Reuse connection stats for DTM */
-    connection_data = (BLE_MBUF_HDR_RX_STATE(hdr) == BLE_LL_STATE_DTM);
+    if (!connection_data) {
+        connection_data = (BLE_MBUF_HDR_RX_STATE(hdr) == BLE_LL_STATE_DTM);
+    }
 #endif
 
     if (crcok) {
@@ -749,12 +840,19 @@ ble_ll_rx_pkt_in(void)
         case BLE_LL_STATE_SCANNING:
             ble_ll_scan_rx_pkt_in(pdu_type, m, ble_hdr);
             break;
-        case BLE_LL_STATE_INITIATING:
-            ble_ll_init_rx_pkt_in(pdu_type, rxbuf, ble_hdr);
-            break;
-#if MYNEWT_VAL(BLE_LL_DIRECT_TEST_MODE) == 1
+#if MYNEWT_VAL(BLE_LL_DTM)
         case BLE_LL_STATE_DTM:
             ble_ll_dtm_rx_pkt_in(m, ble_hdr);
+            break;
+#endif
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_PERIODIC_ADV)
+        case BLE_LL_STATE_SYNC:
+            ble_ll_sync_rx_pkt_in(m, ble_hdr);
+            break;
+#endif
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_EXT_ADV)
+        case BLE_LL_STATE_SCAN_AUX:
+            ble_ll_scan_aux_rx_pkt_in(m, ble_hdr);
             break;
 #endif
         default:
@@ -877,15 +975,22 @@ ble_ll_rx_start(uint8_t *rxbuf, uint8_t chan, struct ble_mbuf_hdr *rxhdr)
     case BLE_LL_STATE_ADV:
         rc = ble_ll_adv_rx_isr_start(pdu_type);
         break;
-    case BLE_LL_STATE_INITIATING:
-        rc = ble_ll_init_rx_isr_start(pdu_type, rxhdr);
-        break;
     case BLE_LL_STATE_SCANNING:
         rc = ble_ll_scan_rx_isr_start(pdu_type, &rxhdr->rxinfo.flags);
         break;
-#if MYNEWT_VAL(BLE_LL_DIRECT_TEST_MODE) == 1
+#if MYNEWT_VAL(BLE_LL_DTM)
     case BLE_LL_STATE_DTM:
         rc = ble_ll_dtm_rx_isr_start(rxhdr, ble_phy_access_addr_get());
+        break;
+#endif
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_PERIODIC_ADV)
+    case BLE_LL_STATE_SYNC:
+        rc = ble_ll_sync_rx_isr_start(pdu_type, rxhdr);
+        break;
+#endif
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_EXT_ADV)
+    case BLE_LL_STATE_SCAN_AUX:
+        rc = ble_ll_scan_aux_rx_isr_start(pdu_type, rxhdr);
         break;
 #endif
     default:
@@ -931,7 +1036,7 @@ ble_ll_rx_end(uint8_t *rxbuf, struct ble_mbuf_hdr *rxhdr)
     ble_ll_trace_u32x3(BLE_LL_TRACE_ID_RX_END, pdu_type, len,
                        rxhdr->rxinfo.flags);
 
-#if MYNEWT_VAL(BLE_LL_DIRECT_TEST_MODE) == 1
+#if MYNEWT_VAL(BLE_LL_DTM)
     if (BLE_MBUF_HDR_RX_STATE(rxhdr) == BLE_LL_STATE_DTM) {
         rc = ble_ll_dtm_rx_isr_end(rxbuf, rxhdr);
         return rc;
@@ -942,6 +1047,13 @@ ble_ll_rx_end(uint8_t *rxbuf, struct ble_mbuf_hdr *rxhdr)
         rc = ble_ll_conn_rx_isr_end(rxbuf, rxhdr);
         return rc;
     }
+
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_PERIODIC_ADV)
+    if (BLE_MBUF_HDR_RX_STATE(rxhdr) == BLE_LL_STATE_SYNC) {
+        rc = ble_ll_sync_rx_isr_end(rxbuf, rxhdr);
+        return rc;
+    }
+#endif
 
     /* If the CRC checks, make sure lengths check! */
     badpkt = 0;
@@ -965,7 +1077,7 @@ ble_ll_rx_end(uint8_t *rxbuf, struct ble_mbuf_hdr *rxhdr)
             break;
         case BLE_ADV_PDU_TYPE_ADV_EXT_IND:
             break;
-        case BLE_ADV_PDU_TYPE_CONNECT_REQ:
+        case BLE_ADV_PDU_TYPE_CONNECT_IND:
             if (len != BLE_CONNECT_REQ_LEN) {
                 badpkt = 1;
             }
@@ -1002,9 +1114,17 @@ ble_ll_rx_end(uint8_t *rxbuf, struct ble_mbuf_hdr *rxhdr)
         }
         rc = ble_ll_scan_rx_isr_end(rxpdu, crcok);
         break;
-    case BLE_LL_STATE_INITIATING:
-        rc = ble_ll_init_rx_isr_end(rxbuf, crcok, rxhdr);
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_EXT_ADV)
+    case BLE_LL_STATE_SCAN_AUX:
+        if (!badpkt) {
+            rxpdu = ble_ll_rxpdu_alloc(len + BLE_LL_PDU_HDR_LEN);
+            if (rxpdu) {
+                ble_phy_rxpdu_copy(rxbuf, rxpdu);
+            }
+        }
+        rc = ble_ll_scan_aux_rx_isr_end(rxpdu, crcok);
         break;
+#endif
     default:
         rc = -1;
         STATS_INC(ble_ll_stats, bad_ll_state);
@@ -1090,27 +1210,17 @@ ble_ll_task(void *arg)
 {
     struct ble_npl_event *ev;
 
-    /*
-     * XXX RIOT ties event queue to a thread which initialized it so we need to
-     * create event queue in LL task, not in general init function. This can
-     * lead to some races between host and LL so for now let us have it as a
-     * hack for RIOT where races can be avoided by proper initialization inside
-     * package.
-     */
-#ifdef RIOT_VERSION
-    ble_npl_eventq_init(&g_ble_ll_data.ll_evq);
-#endif
-
     /* Init ble phy */
     ble_phy_init();
 
     /* Set output power to 1mW (0 dBm) */
     ble_phy_txpwr_set(MYNEWT_VAL(BLE_LL_TX_PWR_DBM));
 
+    /* Register callback for transport */
+    ble_hci_trans_cfg_ll(ble_ll_hci_cmd_rx, NULL, ble_ll_hci_acl_rx, NULL);
+
     /* Tell the host that we are ready to receive packets */
     ble_ll_hci_send_noop();
-
-    ble_ll_rand_start();
 
     while (1) {
         ev = ble_npl_eventq_get(&g_ble_ll_data.ll_evq, BLE_NPL_TIME_FOREVER);
@@ -1132,6 +1242,10 @@ void
 ble_ll_state_set(uint8_t ll_state)
 {
     g_ble_ll_data.ll_state = ll_state;
+
+    if (ll_state == BLE_LL_STATE_STANDBY) {
+        BLE_LL_DEBUG_GPIO(SCHED_ITEM, 0);
+    }
 }
 
 /**
@@ -1176,14 +1290,50 @@ ble_ll_read_supp_states(void)
 /**
  * Returns the features supported by the link layer
  *
- * @return uint32_t bitmask of supported features.
+ * @return uint64_t bitmask of supported features.
  */
-uint32_t
+uint64_t
 ble_ll_read_supp_features(void)
 {
     return g_ble_ll_data.ll_supp_features;
 }
 
+/**
+ * Sets the features controlled by the host.
+ *
+ * @return HCI command status
+ */
+int
+ble_ll_set_host_feat(const uint8_t *cmdbuf, uint8_t len)
+{
+    const struct ble_hci_le_set_host_feat_cp *cmd = (const void *) cmdbuf;
+    uint64_t mask;
+
+    if (len != sizeof(*cmd)) {
+        return BLE_ERR_INV_HCI_CMD_PARMS;
+    }
+
+    if (!SLIST_EMPTY(&g_ble_ll_conn_active_list)) {
+        return BLE_ERR_CMD_DISALLOWED;
+    }
+
+    if ((cmd->bit_num > 0x3F) || (cmd->val > 1)) {
+        return BLE_ERR_INV_HCI_CMD_PARMS;
+    }
+
+    mask = (uint64_t)1 << (cmd->bit_num);
+    if (!(mask & BLE_LL_HOST_CONTROLLED_FEATURES)) {
+        return BLE_ERR_UNSUPPORTED;
+    }
+
+    if (cmd->val == 0) {
+        g_ble_ll_data.ll_supp_features &= ~(mask);
+    } else {
+        g_ble_ll_data.ll_supp_features |= mask;
+    }
+
+    return BLE_ERR_SUCCESS;
+}
 /**
  * Flush a link layer packet queue.
  *
@@ -1236,6 +1386,20 @@ ble_ll_mbuf_init(struct os_mbuf *m, uint8_t pdulen, uint8_t hdr)
     ble_hdr->txinfo.hdr_byte = hdr;
 }
 
+static void
+ble_ll_validate_task(void)
+{
+#ifdef MYNEWT
+#ifndef NDEBUG
+    struct os_task_info oti;
+
+    os_task_info_get(&g_ble_ll_task, &oti);
+
+    BLE_LL_ASSERT(oti.oti_stkusage < oti.oti_stksize);
+#endif
+#endif
+}
+
 /**
  * Called to reset the controller. This performs a "software reset" of the link
  * layer; it does not perform a HW reset of the controller nor does it reset
@@ -1252,23 +1416,26 @@ ble_ll_reset(void)
     int rc;
     os_sr_t sr;
 
-    /* Stop the phy */
-    ble_phy_disable();
+    /* do sanity check on LL task stack */
+    ble_ll_validate_task();
 
-    /* Stop any wait for response timer */
     OS_ENTER_CRITICAL(sr);
-    ble_ll_wfr_disable();
+    ble_phy_disable();
     ble_ll_sched_stop();
-    OS_EXIT_CRITICAL(sr);
-
-    /* Stop any scanning */
     ble_ll_scan_reset();
+    ble_ll_rfmgmt_reset();
+    OS_EXIT_CRITICAL(sr);
 
     /* Stop any advertising */
     ble_ll_adv_reset();
 
-#if MYNEWT_VAL(BLE_LL_DIRECT_TEST_MODE)
+#if MYNEWT_VAL(BLE_LL_DTM)
     ble_ll_dtm_reset();
+#endif
+
+    /* Stop sync */
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_PERIODIC_ADV)
+    ble_ll_sync_reset();
 #endif
 
     /* FLush all packets from Link layer queues */
@@ -1294,11 +1461,6 @@ ble_ll_reset(void)
     /* Set state to standby */
     ble_ll_state_set(BLE_LL_STATE_STANDBY);
 
-#ifdef BLE_XCVR_RFCLK
-    /* Stops rf clock and rfclock timer */
-    ble_ll_xcvr_rfclk_stop();
-#endif
-
     /* Reset our random address */
     memset(g_random_addr, 0, BLE_DEV_ADDR_LEN);
 
@@ -1306,7 +1468,7 @@ ble_ll_reset(void)
     ble_ll_whitelist_clear();
 
     /* Reset resolving list */
-#if (MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_PRIVACY) == 1)
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_PRIVACY)
     ble_ll_resolv_list_reset();
 #endif
 
@@ -1314,23 +1476,6 @@ ble_ll_reset(void)
     rc = ble_phy_init();
 
     return rc;
-}
-
-static void
-ble_ll_seed_prng(void)
-{
-    uint32_t seed;
-    int i;
-
-    /* Seed random number generator with least significant bytes of device
-     * address.
-     */
-    seed = 0;
-    for (i = 0; i < 4; ++i) {
-        seed |= g_dev_addr[i];
-        seed <<= 8;
-    }
-    srand(seed);
 }
 
 uint32_t
@@ -1368,7 +1513,7 @@ uint16_t
 ble_ll_pdu_max_tx_octets_get(uint32_t usecs, int phy_mode)
 {
     uint32_t header_tx_time;
-    uint16_t octets;
+    uint16_t octets = 0;
 
     BLE_LL_ASSERT(phy_mode < BLE_PHY_NUM_MODE);
 
@@ -1412,6 +1557,12 @@ ble_ll_pdu_max_tx_octets_get(uint32_t usecs, int phy_mode)
     return max(27, octets);
 }
 
+static inline bool
+ble_ll_is_addr_empty(const uint8_t *addr)
+{
+    return memcmp(addr, BLE_ADDR_ANY, BLE_DEV_ADDR_LEN) == 0;
+}
+
 /**
  * Initialize the Link Layer. Should be called only once
  *
@@ -1421,10 +1572,7 @@ void
 ble_ll_init(void)
 {
     int rc;
-    uint32_t features;
-#ifdef BLE_XCVR_RFCLK
-    uint32_t xtal_ticks;
-#endif
+    uint64_t features;
     ble_addr_t addr;
     struct ble_ll_obj *lldata;
 
@@ -1434,29 +1582,20 @@ ble_ll_init(void)
     ble_ll_trace_init();
     ble_phy_trace_init();
 
-    /* Retrieve the public device address if not set by syscfg */
-    memcpy(&addr.val[0], MYNEWT_VAL_BLE_PUBLIC_DEV_ADDR, BLE_DEV_ADDR_LEN);
-    if (!memcmp(&addr.val[0], ((ble_addr_t *)BLE_ADDR_ANY)->val,
-                BLE_DEV_ADDR_LEN)) {
-        rc = ble_hw_get_public_addr(&addr);
-        if (!rc) {
-            memcpy(g_dev_addr, &addr.val[0], BLE_DEV_ADDR_LEN);
+    /* Set public device address if not already set */
+    if (ble_ll_is_addr_empty(g_dev_addr)) {
+        /* Use sycfg address if configured, otherwise try to read from HW */
+        if (!ble_ll_is_addr_empty(MYNEWT_VAL(BLE_PUBLIC_DEV_ADDR))) {
+            memcpy(g_dev_addr, MYNEWT_VAL(BLE_PUBLIC_DEV_ADDR), BLE_DEV_ADDR_LEN);
+        } else {
+            rc = ble_hw_get_public_addr(&addr);
+            if (!rc) {
+                memcpy(g_dev_addr, &addr.val[0], BLE_DEV_ADDR_LEN);
+            }
         }
-    } else {
-        memcpy(g_dev_addr, &addr.val[0], BLE_DEV_ADDR_LEN);
     }
 
-#ifdef BLE_XCVR_RFCLK
-    /* Settling time of crystal, in ticks */
-    xtal_ticks = MYNEWT_VAL(BLE_XTAL_SETTLE_TIME);
-    BLE_LL_ASSERT(xtal_ticks != 0);
-    g_ble_ll_data.ll_xtal_ticks = os_cputime_usecs_to_ticks(xtal_ticks);
-
-    /* Initialize rf clock timer */
-    os_cputime_timer_init(&g_ble_ll_data.ll_rfclk_timer,
-                          ble_ll_xcvr_rfclk_timer_exp, NULL);
-
-#endif
+    ble_ll_rfmgmt_init();
 
     /* Get pointer to global data object */
     lldata = &g_ble_ll_data;
@@ -1465,17 +1604,8 @@ ble_ll_init(void)
     lldata->ll_num_acl_pkts = MYNEWT_VAL(BLE_ACL_BUF_COUNT);
     lldata->ll_acl_pkt_size = MYNEWT_VAL(BLE_ACL_BUF_SIZE);
 
-    /*
-     * XXX RIOT ties event queue to a thread which initialized it so we need to
-     * create event queue in LL task, not in general init function. This can
-     * lead to some races between host and LL so for now let us have it as a
-     * hack for RIOT where races can be avoided by proper initialization inside
-     * package.
-     */
-#ifndef RIOT_VERSION
     /* Initialize eventq */
     ble_npl_eventq_init(&lldata->ll_evq);
-#endif
 
     /* Initialize the transmit (from host) and receive (from phy) queues */
     STAILQ_INIT(&lldata->ll_tx_pkt_q);
@@ -1513,54 +1643,82 @@ ble_ll_init(void)
     /* Set the supported features. NOTE: we always support extended reject. */
     features = BLE_LL_FEAT_EXTENDED_REJ;
 
-#if (MYNEWT_VAL(BLE_LL_CFG_FEAT_DATA_LEN_EXT) == 1)
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_DATA_LEN_EXT)
     features |= BLE_LL_FEAT_DATA_LEN_EXT;
 #endif
-#if (MYNEWT_VAL(BLE_LL_CFG_FEAT_CONN_PARAM_REQ) == 1)
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_CONN_PARAM_REQ)
     features |= BLE_LL_FEAT_CONN_PARM_REQ;
 #endif
-#if (MYNEWT_VAL(BLE_LL_CFG_FEAT_SLAVE_INIT_FEAT_XCHG) == 1)
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_SLAVE_INIT_FEAT_XCHG)
     features |= BLE_LL_FEAT_SLAVE_INIT;
 #endif
-#if (MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_ENCRYPTION) == 1)
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_ENCRYPTION)
     features |= BLE_LL_FEAT_LE_ENCRYPTION;
 #endif
 
-#if (MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_PRIVACY) == 1)
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_PRIVACY)
     features |= (BLE_LL_FEAT_LL_PRIVACY | BLE_LL_FEAT_EXT_SCAN_FILT);
     ble_ll_resolv_init();
 #endif
 
-#if (MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_PING) == 1)
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_PING)
     features |= BLE_LL_FEAT_LE_PING;
 #endif
 
-#if (MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_EXT_ADV) == 1)
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_EXT_ADV)
     features |= BLE_LL_FEAT_EXT_ADV;
 #endif
 
-#if (MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_CSA2) == 1)
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_CSA2)
     /* CSA2 */
     features |= BLE_LL_FEAT_CSA2;
 #endif
 
-#if (MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_2M_PHY) == 1)
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_2M_PHY)
     features |= BLE_LL_FEAT_LE_2M_PHY;
 #endif
 
-#if (MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_CODED_PHY) == 1)
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_CODED_PHY)
     features |= BLE_LL_FEAT_LE_CODED_PHY;
 #endif
 
-    /* Initialize random number generation */
-    ble_ll_rand_init();
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_PERIODIC_ADV)
+    features |= BLE_LL_FEAT_PERIODIC_ADV;
+    ble_ll_sync_init();
+#endif
 
-    /* XXX: This really doesn't belong here, as the address probably has not
-     * been set yet.
-     */
-    ble_ll_seed_prng();
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_PERIODIC_ADV_SYNC_TRANSFER)
+    features |= BLE_LL_FEAT_SYNC_TRANS_RECV;
+    features |= BLE_LL_FEAT_SYNC_TRANS_SEND;
+#endif
+
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_SCA_UPDATE)
+    features |= BLE_LL_FEAT_SCA_UPDATE;
+#endif
+
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_ISO)
+    features |= BLE_LL_FEAT_CIS_MASTER;
+    features |= BLE_LL_FEAT_CIS_SLAVE;
+    features |= BLE_LL_FEAT_ISO_BROADCASTER;
+    features |= BLE_LL_FEAT_ISO_HOST_SUPPORT;
+#endif
 
     lldata->ll_supp_features = features;
+
+    /* Initialize random number generation */
+    ble_ll_rand_init();
+    /* Start the random number generator */
+    ble_ll_rand_start();
+
+    rc = stats_init_and_reg(STATS_HDR(ble_ll_stats),
+                            STATS_SIZE_INIT_PARMS(ble_ll_stats, STATS_SIZE_32),
+                            STATS_NAME_INIT_PARMS(ble_ll_stats),
+                            "ble_ll");
+    SYSINIT_PANIC_ASSERT(rc == 0);
+
+#if MYNEWT_VAL(BLE_LL_DTM)
+    ble_ll_dtm_init();
+#endif
 
 #if MYNEWT
     /* Initialize the LL task */
@@ -1574,17 +1732,5 @@ ble_ll_init(void)
  * routine which is wrapped by nimble_port_ll_task_func().
  */
 
-#endif
-
-    rc = stats_init_and_reg(STATS_HDR(ble_ll_stats),
-                            STATS_SIZE_INIT_PARMS(ble_ll_stats, STATS_SIZE_32),
-                            STATS_NAME_INIT_PARMS(ble_ll_stats),
-                            "ble_ll");
-    SYSINIT_PANIC_ASSERT(rc == 0);
-
-    ble_hci_trans_cfg_ll(ble_ll_hci_cmd_rx, NULL, ble_ll_hci_acl_rx, NULL);
-
-#if MYNEWT_VAL(BLE_LL_DIRECT_TEST_MODE)
-    ble_ll_dtm_init();
 #endif
 }

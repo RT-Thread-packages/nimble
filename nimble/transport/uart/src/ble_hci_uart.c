@@ -53,7 +53,7 @@
  */
 
 /* XXX: for now, define this here */
-#if MYNEWT_VAL(BLE_DEVICE)
+#if MYNEWT_VAL(BLE_CONTROLLER)
 extern void ble_ll_data_buffer_overflow(void);
 extern void ble_ll_hw_error(uint8_t err);
 
@@ -193,10 +193,8 @@ ble_hci_trans_acl_buf_alloc(void)
     struct os_mbuf *m;
     uint8_t usrhdr_len;
 
-#if MYNEWT_VAL(BLE_DEVICE)
+#if MYNEWT_VAL(BLE_CONTROLLER)
     usrhdr_len = sizeof(struct ble_mbuf_hdr);
-#elif MYNEWT_VAL(BLE_HS_FLOW_CTRL)
-    usrhdr_len = BLE_MBUF_HS_HDR_LEN;
 #else
     usrhdr_len = 0;
 #endif
@@ -290,7 +288,7 @@ ble_hci_uart_tx_pkt_type(void)
         ble_hci_uart_state.tx_cmd.data = pkt->data;
         ble_hci_uart_state.tx_cmd.cur = 0;
         ble_hci_uart_state.tx_cmd.len = ble_hci_uart_state.tx_cmd.data[2] +
-                                        BLE_HCI_CMD_HDR_LEN;
+                                        sizeof(struct ble_hci_cmd);
         break;
 
     case BLE_HCI_UART_H4_EVT:
@@ -298,7 +296,7 @@ ble_hci_uart_tx_pkt_type(void)
         ble_hci_uart_state.tx_cmd.data = pkt->data;
         ble_hci_uart_state.tx_cmd.cur = 0;
         ble_hci_uart_state.tx_cmd.len = ble_hci_uart_state.tx_cmd.data[1] +
-                                        BLE_HCI_EVENT_HDR_LEN;
+                                        sizeof(struct ble_hci_ev);
         break;
 
     case BLE_HCI_UART_H4_ACL:
@@ -387,7 +385,7 @@ ble_hci_uart_tx_char(void *arg)
     return rc;
 }
 
-#if MYNEWT_VAL(BLE_DEVICE)
+#if MYNEWT_VAL(BLE_CONTROLLER)
 /**
  * HCI uart sync lost.
  *
@@ -420,7 +418,7 @@ ble_hci_uart_rx_pkt_type(uint8_t data)
 
     switch (ble_hci_uart_state.rx_type) {
     /* Host should never receive a command! */
-#if MYNEWT_VAL(BLE_DEVICE)
+#if MYNEWT_VAL(BLE_CONTROLLER)
     case BLE_HCI_UART_H4_CMD:
         ble_hci_uart_state.rx_cmd.len = 0;
         ble_hci_uart_state.rx_cmd.cur = 0;
@@ -460,7 +458,7 @@ ble_hci_uart_rx_pkt_type(uint8_t data)
         break;
 
     default:
-#if MYNEWT_VAL(BLE_DEVICE)
+#if MYNEWT_VAL(BLE_CONTROLLER)
         /*
          * If we receive an unknown HCI packet type this is considered a loss
          * of sync.
@@ -479,7 +477,7 @@ ble_hci_uart_rx_pkt_type(uint8_t data)
     return 0;
 }
 
-#if MYNEWT_VAL(BLE_DEVICE)
+#if MYNEWT_VAL(BLE_CONTROLLER)
 /**
  * HCI uart sync loss.
  *
@@ -543,13 +541,13 @@ ble_hci_uart_rx_cmd(uint8_t data)
 
     ble_hci_uart_state.rx_cmd.data[ble_hci_uart_state.rx_cmd.cur++] = data;
 
-    if (ble_hci_uart_state.rx_cmd.cur < BLE_HCI_CMD_HDR_LEN) {
+    if (ble_hci_uart_state.rx_cmd.cur < sizeof(struct ble_hci_cmd)) {
         return;
     }
 
-    if (ble_hci_uart_state.rx_cmd.cur == BLE_HCI_CMD_HDR_LEN) {
+    if (ble_hci_uart_state.rx_cmd.cur == sizeof(struct ble_hci_cmd)) {
         ble_hci_uart_state.rx_cmd.len = ble_hci_uart_state.rx_cmd.data[2] +
-                                         BLE_HCI_CMD_HDR_LEN;
+                                        sizeof(struct ble_hci_cmd);
     }
 
     if (ble_hci_uart_state.rx_cmd.cur == ble_hci_uart_state.rx_cmd.len) {
@@ -568,12 +566,12 @@ ble_hci_uart_rx_skip_cmd(uint8_t data)
 {
     ble_hci_uart_state.rx_cmd.cur++;
 
-    if (ble_hci_uart_state.rx_cmd.cur < BLE_HCI_CMD_HDR_LEN) {
+    if (ble_hci_uart_state.rx_cmd.cur < sizeof(struct ble_hci_cmd)) {
         return;
     }
 
-    if (ble_hci_uart_state.rx_cmd.cur == BLE_HCI_CMD_HDR_LEN) {
-        ble_hci_uart_state.rx_cmd.len = data + BLE_HCI_CMD_HDR_LEN;
+    if (ble_hci_uart_state.rx_cmd.cur == sizeof(struct ble_hci_cmd)) {
+        ble_hci_uart_state.rx_cmd.len = data + sizeof(struct ble_hci_cmd);
     }
 
     if (ble_hci_uart_state.rx_cmd.cur == ble_hci_uart_state.rx_cmd.len) {
@@ -591,7 +589,7 @@ ble_hci_uart_rx_skip_cmd(uint8_t data)
 
 #if MYNEWT_VAL(BLE_HOST)
 static inline void
-ble_hci_uart_rx_evt_cb()
+ble_hci_uart_rx_evt_cb(void)
 {
     int rc;
 
@@ -625,13 +623,13 @@ ble_hci_uart_rx_evt(uint8_t data)
 
     ble_hci_uart_state.rx_cmd.data[ble_hci_uart_state.rx_cmd.cur++] = data;
 
-    if (ble_hci_uart_state.rx_cmd.cur < BLE_HCI_EVENT_HDR_LEN) {
+    if (ble_hci_uart_state.rx_cmd.cur < sizeof(struct ble_hci_ev)) {
         return;
     }
 
-    if (ble_hci_uart_state.rx_cmd.cur == BLE_HCI_EVENT_HDR_LEN) {
+    if (ble_hci_uart_state.rx_cmd.cur == sizeof(struct ble_hci_ev)) {
         ble_hci_uart_state.rx_cmd.len = ble_hci_uart_state.rx_cmd.data[1] +
-                                        BLE_HCI_EVENT_HDR_LEN;
+                                        sizeof(struct ble_hci_ev);
     }
 
     ble_hci_uart_rx_evt_cb();
@@ -642,10 +640,10 @@ ble_hci_uart_rx_le_evt(uint8_t data)
 {
     ble_hci_uart_state.rx_cmd.cur++;
 
-    if (ble_hci_uart_state.rx_cmd.cur == BLE_HCI_EVENT_HDR_LEN) {
+    if (ble_hci_uart_state.rx_cmd.cur == sizeof(struct ble_hci_ev)) {
         /* LE Meta Event parameter length is never 0 */
         assert(data != 0);
-        ble_hci_uart_state.rx_cmd.len = data + BLE_HCI_EVENT_HDR_LEN;
+        ble_hci_uart_state.rx_cmd.len = data + sizeof(struct ble_hci_ev);
         return;
     }
 
@@ -668,7 +666,7 @@ ble_hci_uart_rx_le_evt(uint8_t data)
 
         ble_hci_uart_state.rx_cmd.data[0] = BLE_HCI_EVCODE_LE_META;
         ble_hci_uart_state.rx_cmd.data[1] =
-                ble_hci_uart_state.rx_cmd.len - BLE_HCI_EVENT_HDR_LEN;
+                ble_hci_uart_state.rx_cmd.len - sizeof(struct ble_hci_ev);
     }
 
     ble_hci_uart_state.rx_cmd.data[ble_hci_uart_state.rx_cmd.cur - 1] = data;
@@ -710,7 +708,7 @@ ble_hci_uart_rx_acl(uint8_t data)
          */
         if (pktlen > MYNEWT_VAL(BLE_ACL_BUF_SIZE)) {
             os_mbuf_free_chain(ble_hci_uart_state.rx_acl.buf);
-#if MYNEWT_VAL(BLE_DEVICE)
+#if MYNEWT_VAL(BLE_CONTROLLER)
             ble_hci_uart_sync_lost();
 #else
         /*
@@ -756,7 +754,7 @@ ble_hci_uart_rx_skip_acl(uint8_t data)
 
     if (rxd_bytes == ble_hci_uart_state.rx_acl.len) {
 /* XXX: I dont like this but for now this denotes controller only */
-#if MYNEWT_VAL(BLE_DEVICE)
+#if MYNEWT_VAL(BLE_CONTROLLER)
         ble_ll_data_buffer_overflow();
 #endif
         ble_hci_uart_state.rx_type = BLE_HCI_UART_H4_NONE;
@@ -769,7 +767,7 @@ ble_hci_uart_rx_char(void *arg, uint8_t data)
     switch (ble_hci_uart_state.rx_type) {
     case BLE_HCI_UART_H4_NONE:
         return ble_hci_uart_rx_pkt_type(data);
-#if MYNEWT_VAL(BLE_DEVICE)
+#if MYNEWT_VAL(BLE_CONTROLLER)
     case BLE_HCI_UART_H4_CMD:
         ble_hci_uart_rx_cmd(data);
         return 0;

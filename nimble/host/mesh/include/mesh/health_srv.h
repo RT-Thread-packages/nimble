@@ -17,23 +17,27 @@
  * @{
  */
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct bt_mesh_health_srv_cb {
 	/* Fetch current faults */
-	int (*fault_get_cur)(struct bt_mesh_model *model, u8_t *test_id,
-			     u16_t *company_id, u8_t *faults,
-			     u8_t *fault_count);
+	int (*fault_get_cur)(struct bt_mesh_model *model, uint8_t *test_id,
+			     uint16_t *company_id, uint8_t *faults,
+			     uint8_t *fault_count);
 
 	/* Fetch registered faults */
-	int (*fault_get_reg)(struct bt_mesh_model *model, u16_t company_id,
-			     u8_t *test_id, u8_t *faults,
-			     u8_t *fault_count);
+	int (*fault_get_reg)(struct bt_mesh_model *model, uint16_t company_id,
+			     uint8_t *test_id, uint8_t *faults,
+			     uint8_t *fault_count);
 
 	/* Clear registered faults */
-	int (*fault_clear)(struct bt_mesh_model *model, u16_t company_id);
+	int (*fault_clear)(struct bt_mesh_model *model, uint16_t company_id);
 
 	/* Run a specific test */
-	int (*fault_test)(struct bt_mesh_model *model, u8_t test_id,
-			  u16_t company_id);
+	int (*fault_test)(struct bt_mesh_model *model, uint8_t test_id,
+			  uint16_t company_id);
 
 	/* Attention on */
 	void (*attn_on)(struct bt_mesh_model *model);
@@ -48,7 +52,7 @@ struct bt_mesh_health_srv_cb {
  *
  *  @param max_faults Maximum number of faults the element can have.
  *
- *  @return a New net_buf_simple of the needed size.
+ *  @return a New os_mbuf of the needed size.
  */
 #define BT_MESH_HEALTH_FAULT_MSG(max_faults) \
 	NET_BUF_SIMPLE(1 + 3 + (max_faults))
@@ -67,6 +71,7 @@ struct bt_mesh_health_srv {
 int bt_mesh_fault_update(struct bt_mesh_elem *elem);
 
 extern const struct bt_mesh_model_op bt_mesh_health_srv_op[];
+extern const struct bt_mesh_model_cb bt_mesh_health_srv_cb;
 
 /** @def BT_MESH_MODEL_HEALTH_SRV
  *
@@ -80,9 +85,13 @@ extern const struct bt_mesh_model_op bt_mesh_health_srv_op[];
  *
  *  @return New mesh model instance.
  */
-#define BT_MESH_MODEL_HEALTH_SRV(srv, pub)                                   \
-		BT_MESH_MODEL(BT_MESH_MODEL_ID_HEALTH_SRV,                   \
-			      bt_mesh_health_srv_op, pub, srv)
+#define BT_MESH_MODEL_HEALTH_SRV(srv, pub)                                     \
+	BT_MESH_MODEL_CB(BT_MESH_MODEL_ID_HEALTH_SRV, bt_mesh_health_srv_op,   \
+			 pub, srv, &bt_mesh_health_srv_cb)
+
+#ifdef __cplusplus
+}
+#endif
 
 /**
  * @}

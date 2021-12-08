@@ -34,6 +34,11 @@ syscfg.defs:
     BLE_MAX_CONNECTIONS:
         description: 'The maximum number of concurrent connections.'
         value: 1
+    BLE_MAX_PERIODIC_SYNCS:
+        description: >
+            The maximum number of concurrent periodic syncs that can 
+            be created
+        value: 1
     BLE_WHITELIST:
         description: >
             Enables the BLE whitelist for controlling who to connect to or
@@ -50,9 +55,55 @@ syscfg.defs:
         description: >
             This enables extended advertising feature.
         value: 0
+    BLE_PERIODIC_ADV:
+        description: >
+            This enables periodic advertising feature.
+        value: 0
+        restrictions:
+            - 'BLE_EXT_ADV if 1'
+    BLE_PERIODIC_ADV_SYNC_TRANSFER:
+        description: >
+            This enables Periodic Advertising Sync Transfer Feature.
+        value: 0
+        restrictions:
+            - 'BLE_PERIODIC_ADV if 1'
+
     BLE_EXT_ADV_MAX_SIZE:
         description: >
             This allows to configure maximum size of advertising data and
             scan response data used in LE Advertising Extensions.
             Valid range 31-1650.
         value: 31
+    BLE_VERSION:
+        description: >
+            This allows to configure supported Bluetooth Core version. Some
+            features may not be available if version is too low. Version is
+            integer for easy comparison.
+        range: 50, 51, 52
+        value: 50
+    BLE_ISO:
+        description: >
+            This enables LE Isochronous Channels as per Bluetooth v5.2
+        value: 0
+        restrictions:
+            - '(BLE_VERSION >= 52) if 1'
+
+    BLE_ISO_TEST:
+        description: >
+            Enables BLE ISO Testing commands
+        value: 0
+        restrictions:
+            - 'BLE_ISO if 1'
+
+    BLE_HCI_VS:
+        description: >
+            Enables support for NimBLE specific vendor HCI commands
+        value: 0
+
+# Allow periodic sync transfer only if 5.1 or higher
+syscfg.restrictions:
+    - "'BLE_PERIODIC_ADV_SYNC_TRANSFER == 0' || 'BLE_VERSION >= 51'"
+
+# Enable VS HCI by default for combined or standalone controller build
+syscfg.vals.BLE_CONTROLLER:
+    BLE_HCI_VS: 1

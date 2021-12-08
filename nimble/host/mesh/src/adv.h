@@ -17,7 +17,7 @@
 #define BT_MESH_ADV_DATA_SIZE 31
 
 /* The user data is a pointer (4 bytes) to struct bt_mesh_adv */
-#define BT_MESH_ADV_USER_DATA_SIZE (sizeof(struct bt_mesh_adv *))
+#define BT_MESH_ADV_USER_DATA_SIZE 4
 
 #define BT_MESH_MBUF_HEADER_SIZE (sizeof(struct os_mbuf_pkthdr) + \
                                     BT_MESH_ADV_USER_DATA_SIZE +\
@@ -31,26 +31,21 @@ enum bt_mesh_adv_type
 	BT_MESH_ADV_URI,
 };
 
-typedef void (*bt_mesh_adv_func_t)(struct os_mbuf *buf, u16_t duration,
+typedef void (*bt_mesh_adv_func_t)(struct os_mbuf *buf, uint16_t duration,
 				   int err, void *user_data);
 
 struct bt_mesh_adv {
+	/** Fragments associated with this buffer. */
+	struct os_mbuf *frags;
+
 	const struct bt_mesh_send_cb *cb;
 	void *cb_data;
 
-	u8_t      type:2,
+	uint8_t      type:2,
 		  busy:1;
-	u8_t      xmit;
+	uint8_t      xmit;
 
-	union {
-		/* Address, used e.g. for Friend Queue messages */
-		u16_t addr;
-
-		/* For transport layer segment sending */
-		struct {
-			u8_t attempts;
-		} seg;
-	};
+	uint8_t flags;
 
 	int ref_cnt;
 	struct ble_npl_event ev;
@@ -59,13 +54,13 @@ struct bt_mesh_adv {
 typedef struct bt_mesh_adv *(*bt_mesh_adv_alloc_t)(int id);
 
 /* xmit_count: Number of retransmissions, i.e. 0 == 1 transmission */
-struct os_mbuf *bt_mesh_adv_create(enum bt_mesh_adv_type type, u8_t xmit,
-				   s32_t timeout);
+struct os_mbuf *bt_mesh_adv_create(enum bt_mesh_adv_type type, uint8_t xmit,
+				   int32_t timeout);
 
 struct os_mbuf *bt_mesh_adv_create_from_pool(struct os_mbuf_pool *pool,
 					     bt_mesh_adv_alloc_t get_id,
 					     enum bt_mesh_adv_type type,
-					     u8_t xmit, s32_t timeout);
+					     uint8_t xmit, int32_t timeout);
 
 void bt_mesh_adv_send(struct os_mbuf *buf, const struct bt_mesh_send_cb *cb,
 		      void *cb_data);

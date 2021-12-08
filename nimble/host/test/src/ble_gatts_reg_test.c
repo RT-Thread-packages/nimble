@@ -22,7 +22,7 @@
 #include "testutil/testutil.h"
 #include "nimble/ble.h"
 #include "host/ble_uuid.h"
-#include "host/ble_hs_test.h"
+#include "ble_hs_test.h"
 #include "ble_hs_test_util.h"
 
 #define BLE_GATTS_REG_TEST_MAX_ENTRIES  256
@@ -297,7 +297,7 @@ ble_gatts_reg_test_misc_dummy_access(uint16_t conn_handle,
     return 0;
 }
 
-TEST_CASE(ble_gatts_reg_test_svc_return)
+TEST_CASE_SELF(ble_gatts_reg_test_svc_return)
 {
     int rc;
 
@@ -344,9 +344,11 @@ TEST_CASE(ble_gatts_reg_test_svc_return)
 
     rc = ble_gatts_register_svcs(svcs_good, NULL, NULL);
     TEST_ASSERT(rc == 0);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_gatts_reg_test_chr_return)
+TEST_CASE_SELF(ble_gatts_reg_test_chr_return)
 {
     int rc;
 
@@ -386,9 +388,11 @@ TEST_CASE(ble_gatts_reg_test_chr_return)
 
     rc = ble_gatts_register_svcs(svcs_good, NULL, NULL);
     TEST_ASSERT(rc == 0);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_gatts_reg_test_dsc_return)
+TEST_CASE_SELF(ble_gatts_reg_test_dsc_return)
 {
     int rc;
 
@@ -442,6 +446,8 @@ TEST_CASE(ble_gatts_reg_test_dsc_return)
 
     rc = ble_gatts_register_svcs(svcs_good, NULL, NULL);
     TEST_ASSERT(rc == 0);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
 static void
@@ -480,7 +486,7 @@ ble_gatts_reg_test_misc_svcs(struct ble_gatt_svc_def *svcs)
     }
 }
 
-TEST_CASE(ble_gatts_reg_test_svc_cb)
+TEST_CASE_SELF(ble_gatts_reg_test_svc_cb)
 {
     /*** 1 primary. */
     ble_gatts_reg_test_misc_svcs((struct ble_gatt_svc_def[]) { {
@@ -530,9 +536,11 @@ TEST_CASE(ble_gatts_reg_test_svc_cb)
         }
     };
     ble_gatts_reg_test_misc_svcs(svcs);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_gatts_reg_test_chr_cb)
+TEST_CASE_SELF(ble_gatts_reg_test_chr_cb)
 {
     uint16_t val_handles[16];
 
@@ -583,9 +591,11 @@ TEST_CASE(ble_gatts_reg_test_chr_cb)
     }, {
         0
     } });
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_gatts_reg_test_dsc_cb)
+TEST_CASE_SELF(ble_gatts_reg_test_dsc_cb)
 {
     uint16_t val_handles[16];
 
@@ -693,12 +703,12 @@ TEST_CASE(ble_gatts_reg_test_dsc_cb)
     }, {
         0
     } });
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
 TEST_SUITE(ble_gatts_reg_suite)
 {
-    tu_suite_set_post_test_cb(ble_hs_test_util_post_test, NULL);
-
     ble_gatts_reg_test_svc_return();
     ble_gatts_reg_test_chr_return();
     ble_gatts_reg_test_dsc_return();
@@ -706,12 +716,4 @@ TEST_SUITE(ble_gatts_reg_suite)
     ble_gatts_reg_test_svc_cb();
     ble_gatts_reg_test_chr_cb();
     ble_gatts_reg_test_dsc_cb();
-}
-
-int
-ble_gatts_reg_test_all(void)
-{
-    ble_gatts_reg_suite();
-
-    return tu_any_failed;
 }

@@ -39,41 +39,47 @@ extern "C" {
 struct hci_le_conn_complete;
 struct hci_conn_update;
 
+#define BLE_GAP_ADV_ITVL_MS(t)              ((t) * 1000 / BLE_HCI_ADV_ITVL)
+#define BLE_GAP_SCAN_ITVL_MS(t)             ((t) * 1000 / BLE_HCI_SCAN_ITVL)
+#define BLE_GAP_SCAN_WIN_MS(t)              ((t) * 1000 / BLE_HCI_SCAN_ITVL)
+#define BLE_GAP_CONN_ITVL_MS(t)             ((t) * 1000 / BLE_HCI_CONN_ITVL)
+#define BLE_GAP_SUPERVISION_TIMEOUT_MS(t)   ((t) / 10)
+
 /** 30 ms. */
-#define BLE_GAP_ADV_FAST_INTERVAL1_MIN      (30 * 1000 / BLE_HCI_ADV_ITVL)
+#define BLE_GAP_ADV_FAST_INTERVAL1_MIN      BLE_GAP_ADV_ITVL_MS(30)
 
 /** 60 ms. */
-#define BLE_GAP_ADV_FAST_INTERVAL1_MAX      (60 * 1000 / BLE_HCI_ADV_ITVL)
+#define BLE_GAP_ADV_FAST_INTERVAL1_MAX      BLE_GAP_ADV_ITVL_MS(60)
 
 /** 100 ms. */
-#define BLE_GAP_ADV_FAST_INTERVAL2_MIN      (100 * 1000 / BLE_HCI_ADV_ITVL)
+#define BLE_GAP_ADV_FAST_INTERVAL2_MIN      BLE_GAP_ADV_ITVL_MS(100)
 
 /** 150 ms. */
-#define BLE_GAP_ADV_FAST_INTERVAL2_MAX      (150 * 1000 / BLE_HCI_ADV_ITVL)
+#define BLE_GAP_ADV_FAST_INTERVAL2_MAX      BLE_GAP_ADV_ITVL_MS(150)
 
 /** 30 ms; active scanning. */
-#define BLE_GAP_SCAN_FAST_INTERVAL_MIN      (30 * 1000 / BLE_HCI_ADV_ITVL)
+#define BLE_GAP_SCAN_FAST_INTERVAL_MIN      BLE_GAP_SCAN_ITVL_MS(30)
 
 /** 60 ms; active scanning. */
-#define BLE_GAP_SCAN_FAST_INTERVAL_MAX      (60 * 1000 / BLE_HCI_ADV_ITVL)
+#define BLE_GAP_SCAN_FAST_INTERVAL_MAX      BLE_GAP_SCAN_ITVL_MS(60)
 
 /** 11.25 ms; limited discovery interval. */
-#define BLE_GAP_LIM_DISC_SCAN_INT           (11.25 * 1000 / BLE_HCI_SCAN_ITVL)
+#define BLE_GAP_LIM_DISC_SCAN_INT           BLE_GAP_SCAN_ITVL_MS(11.25)
 
 /** 11.25 ms; limited discovery window (not from the spec). */
-#define BLE_GAP_LIM_DISC_SCAN_WINDOW        (11.25 * 1000 / BLE_HCI_SCAN_ITVL)
+#define BLE_GAP_LIM_DISC_SCAN_WINDOW        BLE_GAP_SCAN_WIN_MS(11.25)
 
 /** 30 ms; active scanning. */
-#define BLE_GAP_SCAN_FAST_WINDOW            (30 * 1000 / BLE_HCI_SCAN_ITVL)
+#define BLE_GAP_SCAN_FAST_WINDOW            BLE_GAP_SCAN_WIN_MS(30)
 
 /* 30.72 seconds; active scanning. */
-#define BLE_GAP_SCAN_FAST_PERIOD            (30.72 * 1000)
+#define BLE_GAP_SCAN_FAST_PERIOD            BLE_GAP_SCAN_ITVL_MS(30.72)
 
 /** 1.28 seconds; background scanning. */
-#define BLE_GAP_SCAN_SLOW_INTERVAL1         (1280 * 1000 / BLE_HCI_SCAN_ITVL)
+#define BLE_GAP_SCAN_SLOW_INTERVAL1         BLE_GAP_SCAN_ITVL_MS(1280)
 
 /** 11.25 ms; background scanning. */
-#define BLE_GAP_SCAN_SLOW_WINDOW1           (11.25 * 1000 / BLE_HCI_SCAN_ITVL)
+#define BLE_GAP_SCAN_SLOW_WINDOW1           BLE_GAP_SCAN_WIN_MS(11.25)
 
 /** 10.24 seconds. */
 #define BLE_GAP_DISC_DUR_DFLT               (10.24 * 1000)
@@ -88,18 +94,18 @@ struct hci_conn_update;
 #define BLE_GAP_CONN_PAUSE_PERIPHERAL       (5 * 1000)
 
 /* 30 ms. */
-#define BLE_GAP_INITIAL_CONN_ITVL_MIN       (30 * 1000 / BLE_HCI_CONN_ITVL)
+#define BLE_GAP_INITIAL_CONN_ITVL_MIN       BLE_GAP_CONN_ITVL_MS(30)
 
 /* 50 ms. */
-#define BLE_GAP_INITIAL_CONN_ITVL_MAX       (50 * 1000 / BLE_HCI_CONN_ITVL)
+#define BLE_GAP_INITIAL_CONN_ITVL_MAX       BLE_GAP_CONN_ITVL_MS(50)
 
 /** Default channels mask: all three channels are used. */
 #define BLE_GAP_ADV_DFLT_CHANNEL_MAP        0x07
 
 #define BLE_GAP_INITIAL_CONN_LATENCY        0
 #define BLE_GAP_INITIAL_SUPERVISION_TIMEOUT 0x0100
-#define BLE_GAP_INITIAL_CONN_MIN_CE_LEN     0x0010
-#define BLE_GAP_INITIAL_CONN_MAX_CE_LEN     0x0300
+#define BLE_GAP_INITIAL_CONN_MIN_CE_LEN     0x0000
+#define BLE_GAP_INITIAL_CONN_MAX_CE_LEN     0x0000
 
 #define BLE_GAP_ROLE_MASTER                 0
 #define BLE_GAP_ROLE_SLAVE                  1
@@ -124,6 +130,11 @@ struct hci_conn_update;
 #define BLE_GAP_EVENT_REPEAT_PAIRING        17
 #define BLE_GAP_EVENT_PHY_UPDATE_COMPLETE   18
 #define BLE_GAP_EVENT_EXT_DISC              19
+#define BLE_GAP_EVENT_PERIODIC_SYNC         20
+#define BLE_GAP_EVENT_PERIODIC_REPORT       21
+#define BLE_GAP_EVENT_PERIODIC_SYNC_LOST    22
+#define BLE_GAP_EVENT_SCAN_REQ_RCVD         23
+#define BLE_GAP_EVENT_PERIODIC_TRANSFER     24
 
 /*** Reason codes for the subscribe GAP event. */
 
@@ -224,43 +235,99 @@ struct ble_gap_conn_desc {
     uint8_t master_clock_accuracy;
 };
 
+/** @brief Connection parameters  */
 struct ble_gap_conn_params {
+    /** Scan interval in 0.625ms units */
     uint16_t scan_itvl;
+
+    /** Scan window in 0.625ms units */
     uint16_t scan_window;
+
+    /** Minimum value for connection interval in 1.25ms units */
     uint16_t itvl_min;
+
+    /** Maximum value for connection interval in 1.25ms units */
     uint16_t itvl_max;
+
+    /** Connection latency */
     uint16_t latency;
+
+    /** Supervision timeout in 10ms units */
     uint16_t supervision_timeout;
+
+    /** Minimum length of connection event in 0.625ms units */
     uint16_t min_ce_len;
+
+    /** Maximum length of connection event in 0.625ms units */
     uint16_t max_ce_len;
 };
 
+/** @brief Extended discovery parameters */
 struct ble_gap_ext_disc_params {
+    /** Scan interval in 0.625ms units */
     uint16_t itvl;
+
+    /** Scan window in 0.625ms units */
     uint16_t window;
+
+    /** If passive scan should be used */
     uint8_t passive:1;
 };
 
+/** @brief Discovery parameters */
 struct ble_gap_disc_params {
+    /** Scan interval in 0.625ms units */
     uint16_t itvl;
+
+    /** Scan window in 0.625ms units */
     uint16_t window;
+
+    /** Scan filter policy */
     uint8_t filter_policy;
+
+    /** If limited discovery procedure should be used */
     uint8_t limited:1;
+
+    /** If passive scan should be used */
     uint8_t passive:1;
+
+    /** If enable duplicates filtering */
     uint8_t filter_duplicates:1;
 };
 
+/** @brief Connection parameters update parameters */
 struct ble_gap_upd_params {
+    /** Minimum value for connection interval in 1.25ms units */
     uint16_t itvl_min;
+
+    /** Maximum value for connection interval in 1.25ms units */
     uint16_t itvl_max;
+
+    /** Connection latency */
     uint16_t latency;
+
+    /** Supervision timeout in 10ms units */
     uint16_t supervision_timeout;
+
+    /** Minimum length of connection event in 0.625ms units */
     uint16_t min_ce_len;
+
+    /** Maximum length of connection event in 0.625ms units */
     uint16_t max_ce_len;
 };
 
+/** @brief Passkey query */
 struct ble_gap_passkey_params {
+    /** Passkey action, can be one of following constants:
+     *  - BLE_SM_IOACT_NONE
+     *  - BLE_SM_IOACT_OOB
+     *  - BLE_SM_IOACT_INPUT
+     *  - BLE_SM_IOACT_DISP
+     *  - BLE_SM_IOACT_NUMCMP
+     */
     uint8_t action;
+
+    /** Passkey to compare, valid for BLE_SM_IOACT_NUMCMP action */
     uint32_t numcmp;
 };
 
@@ -270,38 +337,100 @@ struct ble_gap_passkey_params {
 #define BLE_GAP_EXT_ADV_DATA_STATUS_INCOMPLETE 0x01
 #define BLE_GAP_EXT_ADV_DATA_STATUS_TRUNCATED  0x02
 
+/** @brief Extended advertising report */
 struct ble_gap_ext_disc_desc {
-    /*** Common fields. */
+    /** Report properties bitmask
+     *  - BLE_HCI_ADV_CONN_MASK
+     *  - BLE_HCI_ADV_SCAN_MASK
+     *  - BLE_HCI_ADV_DIRECT_MASK
+     *  - BLE_HCI_ADV_SCAN_RSP_MASK
+     *  - BLE_HCI_ADV_LEGACY_MASK
+     *  */
     uint8_t props;
+
+    /** Advertising data status, can be one of following constants:
+     *  - BLE_GAP_EXT_ADV_DATA_STATUS_COMPLETE
+     *  - BLE_GAP_EXT_ADV_DATA_STATUS_INCOMPLETE
+     *  - BLE_GAP_EXT_ADV_DATA_STATUS_TRUNCATED
+     */
     uint8_t data_status;
+
+    /** Legacy advertising PDU type. Valid if BLE_HCI_ADV_LEGACY_MASK props is
+     * set. Can be one of following constants:
+     *  - BLE_HCI_ADV_RPT_EVTYPE_ADV_IND
+     *  - BLE_HCI_ADV_RPT_EVTYPE_DIR_IND
+     *  - BLE_HCI_ADV_RPT_EVTYPE_SCAN_IND
+     *  - BLE_HCI_ADV_RPT_EVTYPE_NONCONN_IND
+     *  - BLE_HCI_ADV_RPT_EVTYPE_SCAN_RSP
+     */
     uint8_t legacy_event_type;
+
+    /** Advertiser address */
     ble_addr_t addr;
+
+    /** Received signal strength indication in dBm (127 if unavailable) */
     int8_t rssi;
-    uint8_t tx_power;
+
+    /** Advertiser transmit power in dBm (127 if unavailable) */
+    int8_t tx_power;
+
+    /** Advertising Set ID */
     uint8_t sid;
+
+    /** Primary advertising PHY, can be one of following constants:
+     *  - BLE_HCI_LE_PHY_1M
+     *  - BLE_HCI_LE_PHY_CODED
+     */
     uint8_t prim_phy;
+
+    /** Secondary advertising PHY, can be one of following constants:
+     *  - BLE_HCI_LE_PHY_1M
+     *  - LE_HCI_LE_PHY_2M
+     *  - BLE_HCI_LE_PHY_CODED
+     */
     uint8_t sec_phy;
+
+    /** Periodic advertising interval. 0 if no periodic advertising. */
+    uint16_t periodic_adv_itvl;
+
+    /** Advertising Data length */
     uint8_t length_data;
-    uint8_t *data;
-    /***
-     * LE direct advertising report fields; direct_addr is BLE_ADDR_ANY if
-     * direct address fields are not present.
+
+    /** Advertising data */
+    const uint8_t *data;
+
+    /** Directed advertising address.  Valid if BLE_HCI_ADV_DIRECT_MASK props is
+     * set (BLE_ADDR_ANY otherwise).
      */
     ble_addr_t direct_addr;
 };
 #endif
 
+/** @brief Advertising report */
 struct ble_gap_disc_desc {
-    /*** Common fields. */
+    /** Advertising PDU type. Can be one of following constants:
+     *  - BLE_HCI_ADV_RPT_EVTYPE_ADV_IND
+     *  - BLE_HCI_ADV_RPT_EVTYPE_DIR_IND
+     *  - BLE_HCI_ADV_RPT_EVTYPE_SCAN_IND
+     *  - BLE_HCI_ADV_RPT_EVTYPE_NONCONN_IND
+     *  - BLE_HCI_ADV_RPT_EVTYPE_SCAN_RSP
+     */
     uint8_t event_type;
-    uint8_t length_data;
-    ble_addr_t addr;
-    int8_t rssi;
-    uint8_t *data;
 
-    /***
-     * LE direct advertising report fields; direct_addr is BLE_ADDR_ANY if
-     * direct address fields are not present.
+    /** Advertising Data length */
+    uint8_t length_data;
+
+    /** Advertiser address */
+    ble_addr_t addr;
+
+    /** Received signal strength indication in dBm (127 if unavailable) */
+    int8_t rssi;
+
+    /** Advertising data */
+    const uint8_t *data;
+
+    /** Directed advertising address.  Valid for BLE_HCI_ADV_RPT_EVTYPE_DIR_IND
+     * event type (BLE_ADDR_ANY otherwise).
      */
     ble_addr_t direct_addr;
 };
@@ -594,7 +723,7 @@ struct ble_gap_event {
             /** The handle of the relevant connection. */
             uint16_t conn_handle;
 
-            /** The handle of the relevant characterstic value. */
+            /** The handle of the relevant characteristic value. */
             uint16_t attr_handle;
 
             /**
@@ -708,6 +837,142 @@ struct ble_gap_event {
             uint8_t tx_phy;
             uint8_t rx_phy;
         } phy_updated;
+#if MYNEWT_VAL(BLE_PERIODIC_ADV)
+        /**
+         * Represents a periodic advertising sync established during discovery
+         * procedure. Valid for the following event types:
+         *     o BLE_GAP_EVENT_PERIODIC_SYNC
+         */
+        struct {
+            /** BLE_ERR_SUCCESS on success or error code on failure. Other
+             * fields are valid only for success
+             */
+            uint8_t status;
+            /** Periodic sync handle */
+            uint16_t sync_handle;
+
+            /** Advertising Set ID */
+            uint8_t sid;
+
+            /** Advertiser address */
+            ble_addr_t adv_addr;
+
+            /** Advertising PHY, can be one of following constants:
+             *  - BLE_HCI_LE_PHY_1M
+             *  - LE_HCI_LE_PHY_2M
+             *  - BLE_HCI_LE_PHY_CODED
+            */
+            uint8_t adv_phy;
+
+            /** Periodic advertising interval */
+            uint16_t per_adv_ival;
+
+            /** Advertiser clock accuracy */
+            uint8_t adv_clk_accuracy;
+        } periodic_sync;
+
+        /**
+         * Represents a periodic advertising report received on established
+         * sync. Valid for the following event types:
+         *     o BLE_GAP_EVENT_PERIODIC_REPORT
+         */
+        struct {
+            /** Periodic sync handle */
+            uint16_t sync_handle;
+
+            /** Advertiser transmit power in dBm (127 if unavailable) */
+            int8_t tx_power;
+
+            /** Received signal strength indication in dBm (127 if unavailable) */
+            int8_t rssi;
+
+            /** Advertising data status, can be one of following constants:
+             *  - BLE_HCI_PERIODIC_DATA_STATUS_COMPLETE
+             *  - BLE_HCI_PERIODIC_DATA_STATUS_INCOMPLETE
+             *  - BLE_HCI_PERIODIC_DATA_STATUS_TRUNCATED
+             */
+            uint8_t data_status;
+
+            /** Advertising Data length */
+            uint8_t data_length;
+
+            /** Advertising data */
+            const uint8_t *data;
+        } periodic_report;
+
+        /**
+         * Represents a periodic advertising sync lost of established sync.
+         * Sync lost reason can be BLE_HS_ETIMEOUT (sync timeout) or
+         * BLE_HS_EDONE (sync terminated locally).
+         * Valid for the following event types:
+         *     o BLE_GAP_EVENT_PERIODIC_SYNC_LOST
+         */
+        struct {
+            /** Periodic sync handle */
+            uint16_t sync_handle;
+
+            /** Reason for sync lost, can be BLE_HS_ETIMEOUT for timeout or
+             * BLE_HS_EDONE for locally terminated sync
+             */
+            int reason;
+        } periodic_sync_lost;
+#endif
+
+#if MYNEWT_VAL(BLE_EXT_ADV)
+        /**
+         * Represents a scan request for an extended advertising instance where
+         * scan request notifications were enabled.
+         * Valid for the following event types:
+         *     o BLE_GAP_EVENT_SCAN_REQ_RCVD
+         */
+        struct {
+            /** Extended advertising instance */
+            uint8_t instance;
+            /** Address of scanner */
+            ble_addr_t scan_addr;
+        } scan_req_rcvd;
+#endif
+#if MYNEWT_VAL(BLE_PERIODIC_ADV_SYNC_TRANSFER)
+        /**
+         * Represents a periodic advertising sync transfer received. Valid for
+         * the following event types:
+         *     o BLE_GAP_EVENT_PERIODIC_TRANSFER
+         */
+        struct {
+            /** BLE_ERR_SUCCESS on success or error code on failure. Sync handle
+             * is valid only for success.
+             */
+            uint8_t status;
+
+            /** Periodic sync handle */
+            uint16_t sync_handle;
+
+            /** Connection handle */
+            uint16_t conn_handle;
+
+            /** Service Data */
+            uint16_t service_data;
+
+            /** Advertising Set ID */
+            uint8_t sid;
+
+            /** Advertiser address */
+            ble_addr_t adv_addr;
+
+            /** Advertising PHY, can be one of following constants:
+             *  - BLE_HCI_LE_PHY_1M
+             *  - LE_HCI_LE_PHY_2M
+             *  - BLE_HCI_LE_PHY_CODED
+            */
+            uint8_t adv_phy;
+
+            /** Periodic advertising interval */
+            uint16_t per_adv_itvl;
+
+            /** Advertiser clock accuracy */
+            uint8_t adv_clk_accuracy;
+        } periodic_transfer;
+#endif
     };
 };
 
@@ -778,7 +1043,7 @@ int ble_gap_set_event_cb(uint16_t conn_handle,
  *                         - BLE_OWN_ADDR_RANDOM
  *                         - BLE_OWN_ADDR_RPA_PUBLIC_DEFAULT
  *                         - BLE_OWN_ADDR_RPA_RANDOM_DEFAULT
- * @param direct_addr   The peer's address for directed advertising. his
+ * @param direct_addr   The peer's address for directed advertising. This
  *                      parameter shall be non-NULL if directed advertising is
  *                      being used.
  * @param duration_ms   The duration of the advertisement procedure. On
@@ -881,39 +1146,408 @@ int ble_gap_adv_set_fields(const struct ble_hs_adv_fields *rsp_fields);
 int ble_gap_adv_rsp_set_fields(const struct ble_hs_adv_fields *rsp_fields);
 
 #if MYNEWT_VAL(BLE_EXT_ADV)
+/** @brief Extended advertising parameters  */
 struct ble_gap_ext_adv_params {
+    /** If perform connectable advertising */
     unsigned int connectable:1;
+
+    /** If perform scannable advertising */
     unsigned int scannable:1;
+
+    /** If perform directed advertising */
     unsigned int directed:1;
+
+    /** If perform high-duty directed advertising */
     unsigned int high_duty_directed:1;
+
+    /** If use legacy PDUs for advertising */
     unsigned int legacy_pdu:1;
+
+    /** If perform anonymous advertising */
     unsigned int anonymous:1;
+
+    /** If include TX power in advertising PDU */
     unsigned int include_tx_power:1;
+
+    /** If enable scan request notification  */
     unsigned int scan_req_notif:1;
 
+    /** Minimum advertising interval in 0.625ms units, if 0 stack use sane
+     *  defaults
+     */
     uint32_t itvl_min;
+
+    /** Maximum advertising interval in 0.625ms units, if 0 stack use sane
+     *  defaults
+     */
     uint32_t itvl_max;
+
+    /** Advertising channel map , if 0 stack use sane defaults */
     uint8_t channel_map;
+
+    /** Own address type to be used by advertising instance */
     uint8_t own_addr_type;
+
+    /** Peer address for directed advertising, valid only if directed is set */
     ble_addr_t peer;
+
+    /** Advertising  Filter policy */
     uint8_t filter_policy;
+
+    /** Primary advertising PHY to use , can be one of following constants:
+     *  - BLE_HCI_LE_PHY_1M
+     *  - BLE_HCI_LE_PHY_CODED
+     */
     uint8_t primary_phy;
+
+    /** Secondary advertising PHY to use, can be one of following constants:
+     *  - BLE_HCI_LE_PHY_1M
+     *  - LE_HCI_LE_PHY_2M
+     *  - BLE_HCI_LE_PHY_CODED
+     */
     uint8_t secondary_phy;
+
+    /** Preferred advertiser transmit power */
     int8_t tx_power;
+
+    /** Advertising Set ID */
     uint8_t sid;
 };
 
+/**
+ * Configure extended advertising instance
+ *
+ * @param instance            Instance ID
+ * @param params              Additional arguments specifying the particulars
+ *                            of the advertising.
+ * @param selected_tx_power   Selected advertising transmit power will be
+ *                            stored in that param if non-NULL.
+ * @param cb                  The callback to associate with this advertising
+ *                            procedure. Advertising complete event is reported
+ *                            through this callback
+ * @param cb_arg              The optional argument to pass to the callback
+ *                            function.
+ *
+ * @return                      0 on success; nonzero on failure.
+ */
 int ble_gap_ext_adv_configure(uint8_t instance,
                               const struct ble_gap_ext_adv_params *params,
                               int8_t *selected_tx_power,
                               ble_gap_event_fn *cb, void *cb_arg);
+
+/**
+ * Set random address for configured advertising instance.
+ *
+ * @param instance            Instance ID
+ * @param addr                Random address to be set
+ *
+ * @return                      0 on success; nonzero on failure.
+ */
 int ble_gap_ext_adv_set_addr(uint8_t instance, const ble_addr_t *addr);
+
+/**
+ * Start advertising instance.
+ *
+ * @param instance            Instance ID
+ * @param duration            The duration of the advertisement procedure. On
+ *                            expiration, the procedure ends and
+ *                            a BLE_GAP_EVENT_ADV_COMPLETE event is reported.
+ *                            Units are 10 milliseconds. Specify 0 for no
+ *                            expiration.
+ * @params max_events         Number of advertising events that should be sent
+ *                            before advertising ends and
+ *                            a BLE_GAP_EVENT_ADV_COMPLETE event is reported.
+ *                            Specify 0 for no limit.
+ *
+ * @return              0 on success, error code on failure.
+ */
 int ble_gap_ext_adv_start(uint8_t instance, int duration, int max_events);
+
+/**
+ * Stops advertising procedure for specified instance.
+ *
+ * @param instance            Instance ID
+ *
+ * @return  0 on success, BLE_HS_EALREADY if there is no active advertising
+ *          procedure for instance, other error code on failure.
+ */
 int ble_gap_ext_adv_stop(uint8_t instance);
+
+/**
+ * Configures the data to include in advertisements packets for specified
+ * advertising instance.
+ *
+ * @param instance            Instance ID
+ * @param data                Chain containing the advertising data.
+ *
+ * @return          0 on success or error code on failure.
+ */
 int ble_gap_ext_adv_set_data(uint8_t instance, struct os_mbuf *data);
+
+/**
+ * Configures the data to include in subsequent scan responses for specified
+ * advertisign instance.
+ *
+ * @param instance            Instance ID
+ * @param data                Chain containing the scan response data.
+ *
+ * @return          0 on success or error code on failure.
+ */
+
 int ble_gap_ext_adv_rsp_set_data(uint8_t instance, struct os_mbuf *data);
+
+/**
+ * Remove existing advertising instance.
+ *
+ * @param instance            Instance ID
+ *
+ * @return              0 on success,
+ *                      BLE_HS_EBUSY if advertising is in progress,
+ *                      other error code on failure.
+ */
 int ble_gap_ext_adv_remove(uint8_t instance);
+
+/**
+ * Clear all existing advertising instances
+ * @return              0 on success,
+ *                      BLE_HS_EBUSY if advertising is in progress,
+ *                      other error code on failure.
+ */
+int ble_gap_ext_adv_clear(void);
+
+/**
+ * Indicates whether an advertisement procedure is currently in progress on
+ * the specified Instance
+ *
+ * @param instance            Instance Id
+ *
+ * @return 0 if there is no active advertising procedure for the instance,
+ *         1 otherwise
+ *
+ */
+int ble_gap_ext_adv_active(uint8_t instance);
 #endif
+
+/* Periodic Advertising */
+#if MYNEWT_VAL(BLE_PERIODIC_ADV)
+
+/** @brief Periodic advertising parameters  */
+struct ble_gap_periodic_adv_params {
+    /** If include TX power in advertising PDU */
+    unsigned int include_tx_power:1;
+
+    /** Minimum advertising interval in 0.625ms units, if 0 stack use sane
+     *  defaults
+     */
+    uint16_t itvl_min;
+
+    /** Maximum advertising interval in 0.625ms units, if 0 stack use sane
+     *  defaults
+     */
+    uint16_t itvl_max;
+};
+
+/** @brief Periodic sync parameters  */
+struct ble_gap_periodic_sync_params {
+    /** The maximum number of periodic advertising events that controller can
+     * skip after a successful receive.
+     * */
+    uint16_t skip;
+
+    /** Synchronization timeout for the periodic advertising train in 10ms units
+     */
+    uint16_t sync_timeout;
+
+    /** If reports should be initially disabled when sync is created */
+    unsigned int reports_disabled:1;
+};
+
+/**
+ * Configure periodic advertising for specified advertising instance
+ *
+ * This is allowed only for instances configured as non-announymous,
+ * non-connectable and non-scannable.
+ *
+ * @param instance            Instance ID
+ * @param params              Additional arguments specifying the particulars
+ *                            of periodic advertising.
+ *
+ * @return                    0 on success; nonzero on failure.
+ */
+int ble_gap_periodic_adv_configure(uint8_t instance,
+                                   const struct ble_gap_periodic_adv_params *params);
+
+/**
+ * Start periodic advertising for specified advertising instance.
+ *
+ * @param instance            Instance ID
+ *
+ * @return              0 on success, error code on failure.
+ */
+int ble_gap_periodic_adv_start(uint8_t instance);
+
+/**
+ * Stop periodic advertising for specified advertising instance.
+ *
+ * @param instance            Instance ID
+ *
+ * @return              0 on success, error code on failure.
+ */
+int ble_gap_periodic_adv_stop(uint8_t instance);
+
+/**
+ * Configures the data to include in periodic advertisements for specified
+ * advertising instance.
+ *
+ * @param instance            Instance ID
+ * @param data                Chain containing the periodic advertising data.
+ *
+ * @return          0 on success or error code on failure.
+ */
+int ble_gap_periodic_adv_set_data(uint8_t instance, struct os_mbuf *data);
+
+/**
+ * Performs the Synchronization procedure with periodic advertiser.
+ *
+ * @param addr               Peer address to synchronize with. If NULL than
+ *                           peers from periodic list are used.
+ * @param adv_sid            Advertiser Set ID
+ * @param params             Additional arguments specifying the particulars
+ *                           of the synchronization procedure.
+ * @param cb                 The callback to associate with this synchrnization
+ *                           procedure. BLE_GAP_EVENT_PERIODIC_REPORT events
+ *                           are reported only by this callback.
+ * @param cb_arg             The optional argument to pass to the callback
+ *                           function.
+ *
+ * @return                   0 on success; nonzero on failure.
+ */
+int ble_gap_periodic_adv_sync_create(const ble_addr_t *addr, uint8_t adv_sid,
+                                     const struct ble_gap_periodic_sync_params *params,
+                                     ble_gap_event_fn *cb, void *cb_arg);
+
+/**
+ * Cancel pending synchronization procedure.
+ *
+ * @return                   0 on success; nonzero on failure.
+ */
+int ble_gap_periodic_adv_sync_create_cancel(void);
+
+/**
+ * Terminate synchronization procedure.
+ *
+ * @param sync_handle        Handle identifying synchronization to terminate.
+ *
+ * @return                   0 on success; nonzero on failure.
+ */
+int ble_gap_periodic_adv_sync_terminate(uint16_t sync_handle);
+
+#if MYNEWT_VAL(BLE_PERIODIC_ADV_SYNC_TRANSFER)
+/**
+ * Disable or enable periodic reports for specified sync.
+ *
+ * @param sync_handle        Handle identifying synchronization.
+ * @param enable             If reports should be enabled.
+ *
+ * @return                   0 on success; nonzero on failure.
+ */
+int ble_gap_periodic_adv_sync_reporting(uint16_t sync_handle, bool enable);
+
+/**
+ * Initialize sync transfer procedure for specified handles.
+ *
+ * This allows to transfer periodic sync to which host is synchronized.
+ *
+ * @param sync_handle        Handle identifying synchronization.
+ * @param conn_handle        Handle identifying connection.
+ * @param service_data       Sync transfer service data
+ *
+ * @return                   0 on success; nonzero on failure.
+ */
+int ble_gap_periodic_adv_sync_transfer(uint16_t sync_handle,
+                                       uint16_t conn_handle,
+                                       uint16_t service_data);
+
+/**
+ * Initialize set info transfer procedure for specified handles.
+ *
+ * This allows to transfer periodic sync which is being advertised by host.
+ *
+ * @param instance           Advertising instance with periodic adv enabled.
+ * @param conn_handle        Handle identifying connection.
+ * @param service_data       Sync transfer service data
+ *
+ * @return                   0 on success; nonzero on failure.
+ */
+int ble_gap_periodic_adv_sync_set_info(uint8_t instance,
+                                       uint16_t conn_handle,
+                                       uint16_t service_data);
+
+/**
+ * Enables or disables sync transfer reception on specified connection.
+ * When sync transfer arrives, BLE_GAP_EVENT_PERIODIC_TRANSFER is sent to the user.
+ * After that, sync transfer reception on that connection is terminated and user needs
+ * to call this API again when expect to receive next sync transfers.
+ *
+ * Note: If ACL connection gets disconnected before sync transfer arrived, user will
+ * not receive BLE_GAP_EVENT_PERIODIC_TRANSFER. Instead, sync transfer reception
+ * is terminated by the host automatically.
+ *
+ * @param conn_handle        Handle identifying connection.
+ * @param params             Parameters for enabled sync transfer reception.
+ *                           Specify NULL to disable reception.
+ * @param cb                 The callback to associate with this synchronization
+ *                           procedure. BLE_GAP_EVENT_PERIODIC_REPORT events
+ *                           are reported only by this callback.
+ * @param cb_arg             The optional argument to pass to the callback
+ *                           function.
+ *
+ * @return                   0 on success; nonzero on failure.
+ */
+int ble_gap_periodic_adv_sync_receive(uint16_t conn_handle,
+                                      const struct ble_gap_periodic_sync_params *params,
+                                      ble_gap_event_fn *cb, void *cb_arg);
+#endif
+
+/**
+ * Add peer device to periodic synchronization list.
+ *
+ * @param addr               Peer address to add to list.
+ * @param adv_sid            Advertiser Set ID
+ *
+ * @return                   0 on success; nonzero on failure.
+ */
+int ble_gap_add_dev_to_periodic_adv_list(const ble_addr_t *peer_addr,
+                                         uint8_t adv_sid);
+
+/**
+ * Remove peer device from periodic synchronization list.
+ *
+ * @param addr               Peer address to remove from list.
+ * @param adv_sid            Advertiser Set ID
+ *
+ * @return                   0 on success; nonzero on failure.
+ */
+int ble_gap_rem_dev_from_periodic_adv_list(const ble_addr_t *peer_addr,
+                                           uint8_t adv_sid);
+
+/**
+ * Clear periodic synchrnization list.
+ *
+ * @return                   0 on success; nonzero on failure.
+ */
+int ble_gap_clear_periodic_adv_list(void);
+
+/**
+ * Get periodic synchronization list size.
+ *
+ * @param per_adv_list_size  On success list size is stored here.
+ *
+ * @return                   0 on success; nonzero on failure.
+ */
+int ble_gap_read_periodic_adv_list_size(uint8_t *per_adv_list_size);
+#endif
+
 
 /**
  * Performs the Limited or General Discovery Procedures.
@@ -931,7 +1565,8 @@ int ble_gap_ext_adv_remove(uint8_t instance);
  *                                  On expiration, the procedure ends and a
  *                                  BLE_GAP_EVENT_DISC_COMPLETE event is
  *                                  reported.  Units are milliseconds.  Specify
- *                                  BLE_HS_FOREVER for no expiration.
+ *                                  BLE_HS_FOREVER for no expiration. Specify
+ *                                  0 to use stack defaults.
  * @param disc_params           Additional arguments specifying the particulars
  *                                  of the discovery procedure.
  * @param cb                    The callback to associate with this discovery
@@ -947,6 +1582,56 @@ int ble_gap_disc(uint8_t own_addr_type, int32_t duration_ms,
                  const struct ble_gap_disc_params *disc_params,
                  ble_gap_event_fn *cb, void *cb_arg);
 
+/**
+ * Performs the Limited or General Extended Discovery Procedures.
+ *
+ * @param own_addr_type         The type of address the stack should use for
+ *                              itself when sending scan requests.  Valid
+ *                              values are:
+ *                                      - BLE_ADDR_TYPE_PUBLIC
+ *                                      - BLE_ADDR_TYPE_RANDOM
+ *                                      - BLE_ADDR_TYPE_RPA_PUB_DEFAULT
+ *                                      - BLE_ADDR_TYPE_RPA_RND_DEFAULT
+ *                              This parameter is ignored unless active
+ *                              scanning is being used.
+ * @param duration              The duration of the discovery procedure.
+ *                                  On expiration, if period is set to 0, the
+ *                                  procedure ends and a
+ *                                  BLE_GAP_EVENT_DISC_COMPLETE event is
+ *                                  reported.  Units are 10 milliseconds.
+ *                                  Specify 0 for no expiration.
+ * @param period                Time interval from when the Controller started
+ *                              its last Scan Duration until it begins the
+ *                              subsequent Scan Duration. Specify 0 to scan
+ *                              continuously. Units are 1.28 second.
+ * @param filter_duplicates     Set to enable packet filtering in the
+ *                              controller
+ * @param filter_policy         Set the used filter policy. Valid values are:
+ *                                      - BLE_HCI_SCAN_FILT_NO_WL
+ *                                      - BLE_HCI_SCAN_FILT_USE_WL
+ *                                      - BLE_HCI_SCAN_FILT_NO_WL_INITA
+ *                                      - BLE_HCI_SCAN_FILT_USE_WL_INITA
+ *                                      - BLE_HCI_SCAN_FILT_MAX
+ *                              This parameter is ignored unless
+ *                              @p filter_duplicates is set.
+ * @param limited               If limited discovery procedure should be used.
+ * @param uncoded_params        Additional arguments specifying the particulars
+ *                              of the discovery procedure for uncoded PHY.
+ *                              If NULL is provided no scan is performed for
+ *                              this PHY.
+  * @param coded_params         Additional arguments specifying the particulars
+ *                              of the discovery procedure for coded PHY.
+ *                              If NULL is provided no scan is performed for
+ *                              this PHY.
+ * @param cb                    The callback to associate with this discovery
+ *                              procedure.  Advertising reports and discovery
+ *                              termination events are reported through this
+ *                              callback.
+ * @param cb_arg                The optional argument to pass to the callback
+ *                              function.
+ *
+ * @return                      0 on success; nonzero on failure.
+ */
 int ble_gap_ext_disc(uint8_t own_addr_type, uint16_t duration, uint16_t period,
                      uint8_t filter_duplicates, uint8_t filter_policy,
                      uint8_t limited,
@@ -1139,6 +1824,22 @@ int ble_gap_update_params(uint16_t conn_handle,
                           const struct ble_gap_upd_params *params);
 
 /**
+ * Configure LE Data Length in controller (OGF = 0x08, OCF = 0x0022).
+ *
+ * @param conn_handle      Connection handle.
+ * @param tx_octets        The preferred value of payload octets that the Controller
+ *                         should use for a new connection (Range
+ *                         0x001B-0x00FB).
+ * @param tx_time          The preferred maximum number of microseconds that the local Controller
+ *                         should use to transmit a single link layer packet
+ *                         (Range 0x0148-0x4290).
+ *
+ * @return                 0 on success,
+ *                         other error code on failure.
+ */
+int ble_gap_set_data_len(uint16_t conn_handle, uint16_t tx_octets, uint16_t tx_time);
+
+/**
  * Initiates the GAP security procedure.
  *
  * Depending on connection role and stored security information this function
@@ -1179,6 +1880,7 @@ int ble_gap_pair_initiate(uint16_t conn_handle);
  *
  * @param conn_handle           The handle corresponding to the connection to
  *                              start encryption.
+ * @param key_size              Encryption key size
  * @param ltk                   Long Term Key to be used for encryption.
  * @param udiv                  Encryption Diversifier for LTK
  * @param rand_val              Random Value for EDIV and LTK
@@ -1191,8 +1893,9 @@ int ble_gap_pair_initiate(uint16_t conn_handle);
  *                                  this connection is already in progress;
  *                              Other nonzero on error.
  */
-int ble_gap_encryption_initiate(uint16_t conn_handle, const uint8_t *ltk,
-                                uint16_t ediv, uint64_t rand_val, int auth);
+int ble_gap_encryption_initiate(uint16_t conn_handle, uint8_t key_size,
+                                const uint8_t *ltk, uint16_t ediv,
+                                uint64_t rand_val, int auth);
 
 /**
  * Retrieves the most-recently measured RSSI for the specified connection.  A
@@ -1237,25 +1940,109 @@ int ble_gap_unpair(const ble_addr_t *peer_addr);
  */
 int ble_gap_unpair_oldest_peer(void);
 
+/**
+ * Similar to `ble_gap_unpair_oldest_peer()`, except it makes sure that the
+ * peer received in input parameters is not deleted.
+ *
+ * @param peer_addr             Address of the peer (not to be deleted)
+ *
+ * @return                      0 on success;
+ *                              A BLE host HCI return code if the controller
+ *                                  rejected the request;
+ *                              A BLE host core return code on unexpected
+ *                                  error.
+ */
+int ble_gap_unpair_oldest_except(const ble_addr_t *peer_addr);
+
 #define BLE_GAP_PRIVATE_MODE_NETWORK        0
 #define BLE_GAP_PRIVATE_MODE_DEVICE         1
+
+/**
+ * Set privacy mode for specified peer device
+ *
+ * @param peer_addr          Peer device address
+ * @param priv_mode          Privacy mode to be used. Can be one of following
+ *                           constants:
+ *                             - BLE_GAP_PRIVATE_MODE_NETWORK
+ *                             - BLE_GAP_PRIVATE_MODE_DEVICE
+ *
+ * @return                   0 on success; nonzero on failure.
+ */
 int ble_gap_set_priv_mode(const ble_addr_t *peer_addr, uint8_t priv_mode);
 
 #define BLE_GAP_LE_PHY_1M                   1
 #define BLE_GAP_LE_PHY_2M                   2
 #define BLE_GAP_LE_PHY_CODED                3
+/**
+ * Read PHYs used for specified connection.
+ *
+ * On success output parameters are filled with information about used PHY type.
+ *
+ * @param conn_handle       Connection handle
+ * @param tx_phy            TX PHY used. Can be one of following constants:
+ *                            - BLE_GAP_LE_PHY_1M
+ *                            - BLE_GAP_LE_PHY_2M
+ *                            - BLE_GAP_LE_PHY_CODED
+ * @param rx_phy            RX PHY used. Can be one of following constants:
+ *                            - BLE_GAP_LE_PHY_1M
+ *                            - BLE_GAP_LE_PHY_2M
+ *                            - BLE_GAP_LE_PHY_CODED
+ *
+ * @return                   0 on success; nonzero on failure.
+ */
 int ble_gap_read_le_phy(uint16_t conn_handle, uint8_t *tx_phy, uint8_t *rx_phy);
 
 #define BLE_GAP_LE_PHY_1M_MASK              0x01
 #define BLE_GAP_LE_PHY_2M_MASK              0x02
 #define BLE_GAP_LE_PHY_CODED_MASK           0x04
 #define BLE_GAP_LE_PHY_ANY_MASK             0x0F
+/**
+ * Set preferred default PHYs to be used for connections.
+ *
+ * @params tx_phys_mask     Preferred TX PHY. Can be mask of following
+ *                          constants:
+ *                          - BLE_GAP_LE_PHY_1M_MASK
+ *                          - BLE_GAP_LE_PHY_2M_MASK
+ *                          - BLE_GAP_LE_PHY_CODED_MASK
+ *                          - BLE_GAP_LE_PHY_ANY_MASK
+ * @params rx_phys_mask     Preferred RX PHY. Can be mask of following
+ *                          constants:
+ *                          - BLE_GAP_LE_PHY_1M_MASK
+ *                          - BLE_GAP_LE_PHY_2M_MASK
+ *                          - BLE_GAP_LE_PHY_CODED_MASK
+ *                          - BLE_GAP_LE_PHY_ANY_MASK
+
+ * @return                   0 on success; nonzero on failure.
+ */
 int ble_gap_set_prefered_default_le_phy(uint8_t tx_phys_mask,
                                         uint8_t rx_phys_mask);
 
 #define BLE_GAP_LE_PHY_CODED_ANY            0
 #define BLE_GAP_LE_PHY_CODED_S2             1
 #define BLE_GAP_LE_PHY_CODED_S8             2
+/**
+ * Set preferred PHYs to be used for connection.
+ *
+ * @param conn_handle       Connection handle
+ * @params tx_phys_mask     Preferred TX PHY. Can be mask of following
+ *                          constants:
+ *                          - BLE_GAP_LE_PHY_1M_MASK
+ *                          - BLE_GAP_LE_PHY_2M_MASK
+ *                          - BLE_GAP_LE_PHY_CODED_MASK
+ *                          - BLE_GAP_LE_PHY_ANY_MASK
+ * @params rx_phys_mask     Preferred RX PHY. Can be mask of following
+ *                          constants:
+ *                          - BLE_GAP_LE_PHY_1M_MASK
+ *                          - BLE_GAP_LE_PHY_2M_MASK
+ *                          - BLE_GAP_LE_PHY_CODED_MASK
+ *                          - BLE_GAP_LE_PHY_ANY_MASK
+ * @param phy_opts          Additional PHY options. Valid values are:
+ *                          - BLE_GAP_LE_PHY_CODED_ANY
+ *                          - BLE_GAP_LE_PHY_CODED_S2
+ *                          - BLE_GAP_LE_PHY_CODED_S8
+ *
+ * @return                   0 on success; nonzero on failure.
+ */
 int ble_gap_set_prefered_le_phy(uint16_t conn_handle, uint8_t tx_phys_mask,
                                 uint8_t rx_phys_mask, uint16_t phy_opts);
 
@@ -1297,10 +2084,6 @@ int ble_gap_event_listener_register(struct ble_gap_event_listener *listener,
  *                      BLE_HS_ENOENT if listener was not registered
  */
 int ble_gap_event_listener_unregister(struct ble_gap_event_listener *listener);
-
-#if MYNEWT_VAL(BLE_MESH)
-int ble_gap_mesh_cb_register(ble_gap_event_fn *cb, void *cb_arg);
-#endif
 
 #ifdef __cplusplus
 }

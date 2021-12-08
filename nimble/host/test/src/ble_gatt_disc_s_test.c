@@ -21,7 +21,7 @@
 #include <errno.h>
 #include "testutil/testutil.h"
 #include "nimble/ble.h"
-#include "host/ble_hs_test.h"
+#include "ble_hs_test.h"
 #include "host/ble_uuid.h"
 #include "ble_hs_test_util.h"
 
@@ -294,7 +294,7 @@ ble_gatt_disc_s_test_misc_good_uuid(
     ble_gatt_disc_s_test_misc_verify_services(services);
 }
 
-TEST_CASE(ble_gatt_disc_s_test_disc_all)
+TEST_CASE_SELF(ble_gatt_disc_s_test_disc_all)
 {
     /*** One 128-bit service. */
     ble_gatt_disc_s_test_misc_good_all((struct ble_gatt_disc_s_test_svc[]) {
@@ -332,9 +332,11 @@ TEST_CASE(ble_gatt_disc_s_test_disc_all)
         { 7, 0xffff,BLE_UUID128_DECLARE(2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2 ), },
         { 0 }
     });
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_gatt_disc_s_test_disc_uuid)
+TEST_CASE_SELF(ble_gatt_disc_s_test_disc_uuid)
 {
     /*** 128-bit service; one entry. */
     ble_gatt_disc_s_test_misc_good_uuid((struct ble_gatt_disc_s_test_svc[]) {
@@ -395,9 +397,11 @@ TEST_CASE(ble_gatt_disc_s_test_disc_uuid)
         { 9, 0xffff,BLE_UUID16_DECLARE(0x1234) },
         { 0 }
     });
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_gatt_disc_s_test_oom_all)
+TEST_CASE_SELF(ble_gatt_disc_s_test_oom_all)
 {
     struct ble_gatt_disc_s_test_svc svcs[] = {
         { 1, 5,     BLE_UUID128_DECLARE(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 ), },
@@ -466,9 +470,11 @@ TEST_CASE(ble_gatt_disc_s_test_oom_all)
                                     BLE_ATT_ERR_ATTR_NOT_FOUND,
                                     1);
     ble_gatt_disc_s_test_misc_verify_services(svcs);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_gatt_disc_s_test_oom_uuid)
+TEST_CASE_SELF(ble_gatt_disc_s_test_oom_uuid)
 {
     /* Retrieve enough services to require two transactions. */
     struct ble_gatt_disc_s_test_svc svcs[] = {
@@ -544,9 +550,11 @@ TEST_CASE(ble_gatt_disc_s_test_oom_uuid)
                                     BLE_ATT_ERR_ATTR_NOT_FOUND,
                                     1);
     ble_gatt_disc_s_test_misc_verify_services(svcs);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_gatt_disc_s_test_oom_timeout)
+TEST_CASE_SELF(ble_gatt_disc_s_test_oom_timeout)
 {
     struct ble_gatt_disc_s_test_svc svcs[] = {
         { 1, 5,  BLE_UUID128_DECLARE(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 ), },
@@ -609,23 +617,15 @@ TEST_CASE(ble_gatt_disc_s_test_oom_timeout)
 
     rc = os_mbuf_free_chain(oms);
     TEST_ASSERT_FATAL(rc == 0);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
 TEST_SUITE(ble_gatt_disc_s_test_suite)
 {
-    tu_suite_set_post_test_cb(ble_hs_test_util_post_test, NULL);
-
     ble_gatt_disc_s_test_disc_all();
     ble_gatt_disc_s_test_disc_uuid();
     ble_gatt_disc_s_test_oom_all();
     ble_gatt_disc_s_test_oom_uuid();
     ble_gatt_disc_s_test_oom_timeout();
-}
-
-int
-ble_gatt_disc_s_test_all(void)
-{
-    ble_gatt_disc_s_test_suite();
-
-    return tu_any_failed;
 }

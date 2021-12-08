@@ -21,7 +21,7 @@
 #include <errno.h>
 #include "testutil/testutil.h"
 #include "nimble/ble.h"
-#include "host/ble_hs_test.h"
+#include "ble_hs_test.h"
 #include "ble_hs_test_util.h"
 
 /**
@@ -74,10 +74,12 @@ ble_att_clt_test_tx_write_req_or_cmd(uint16_t conn_handle, uint16_t handle,
     TEST_ASSERT(rc == 0);
 }
 
-TEST_CASE(ble_att_clt_test_tx_find_info)
+TEST_CASE_SELF(ble_att_clt_test_tx_find_info)
 {
     uint16_t conn_handle;
     int rc;
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 
     conn_handle = ble_att_clt_test_misc_init();
 
@@ -96,9 +98,11 @@ TEST_CASE(ble_att_clt_test_tx_find_info)
     /*** Success; start and end handles equal. */
     rc = ble_att_clt_tx_find_info(conn_handle, 500, 500);
     TEST_ASSERT(rc == 0);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_att_clt_test_rx_find_info)
+TEST_CASE_SELF(ble_att_clt_test_rx_find_info)
 {
     struct ble_att_find_info_rsp rsp;
     uint16_t conn_handle;
@@ -161,6 +165,8 @@ TEST_CASE(ble_att_clt_test_rx_find_info)
     rc = ble_hs_test_util_l2cap_rx_payload_flat(conn_handle, BLE_L2CAP_CID_ATT,
                                                 buf, off);
     TEST_ASSERT(rc == 0);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
 static void
@@ -183,6 +189,8 @@ ble_att_clt_test_case_tx_write_req_or_cmd(int is_req)
                                          sizeof value300, is_req);
     ble_att_clt_test_misc_verify_tx_write(0xab83, value300,
                                           BLE_ATT_MTU_DFLT - 3, is_req);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
 static void
@@ -265,13 +273,13 @@ ble_att_clt_test_misc_tx_mtu(uint16_t conn_handle, uint16_t mtu, int status)
     }
 }
 
-TEST_CASE(ble_att_clt_test_tx_write)
+TEST_CASE_SELF(ble_att_clt_test_tx_write)
 {
     ble_att_clt_test_case_tx_write_req_or_cmd(0);
     ble_att_clt_test_case_tx_write_req_or_cmd(1);
 }
 
-TEST_CASE(ble_att_clt_test_tx_read)
+TEST_CASE_SELF(ble_att_clt_test_tx_read)
 {
     uint16_t conn_handle;
     int rc;
@@ -285,9 +293,11 @@ TEST_CASE(ble_att_clt_test_tx_read)
     /*** Error: handle of 0. */
     rc = ble_att_clt_tx_read(conn_handle, 0);
     TEST_ASSERT(rc == BLE_HS_EINVAL);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_att_clt_test_rx_read)
+TEST_CASE_SELF(ble_att_clt_test_rx_read)
 {
     uint16_t conn_handle;
     uint8_t buf[1024];
@@ -311,9 +321,11 @@ TEST_CASE(ble_att_clt_test_rx_read)
     rc = ble_hs_test_util_l2cap_rx_payload_flat(conn_handle, BLE_L2CAP_CID_ATT,
                                                 buf, 1);
     TEST_ASSERT(rc == 0);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_att_clt_test_tx_read_blob)
+TEST_CASE_SELF(ble_att_clt_test_tx_read_blob)
 {
     uint16_t conn_handle;
     int rc;
@@ -327,9 +339,11 @@ TEST_CASE(ble_att_clt_test_tx_read_blob)
     /*** Error: handle of 0. */
     rc = ble_att_clt_tx_read_blob(conn_handle, 0, 0);
     TEST_ASSERT(rc == BLE_HS_EINVAL);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_att_clt_test_rx_read_blob)
+TEST_CASE_SELF(ble_att_clt_test_rx_read_blob)
 {
     uint16_t conn_handle;
     uint8_t buf[1024];
@@ -353,9 +367,11 @@ TEST_CASE(ble_att_clt_test_rx_read_blob)
     rc = ble_hs_test_util_l2cap_rx_payload_flat(conn_handle, BLE_L2CAP_CID_ATT,
                                                 buf, 1);
     TEST_ASSERT(rc == 0);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_att_clt_test_tx_read_mult)
+TEST_CASE_SELF(ble_att_clt_test_tx_read_mult)
 {
     struct os_mbuf *om;
     uint16_t conn_handle;
@@ -378,9 +394,11 @@ TEST_CASE(ble_att_clt_test_tx_read_mult)
     /*** Error: no handles. */
     rc = ble_att_clt_tx_read_mult(conn_handle, NULL, 0);
     TEST_ASSERT(rc == BLE_HS_EINVAL);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_att_clt_test_rx_read_mult)
+TEST_CASE_SELF(ble_att_clt_test_rx_read_mult)
 {
     uint16_t conn_handle;
     uint8_t buf[1024];
@@ -411,9 +429,11 @@ TEST_CASE(ble_att_clt_test_rx_read_mult)
         conn_handle, BLE_L2CAP_CID_ATT, buf,
         BLE_ATT_READ_MULT_RSP_BASE_SZ + 0);
     TEST_ASSERT(rc == 0);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_att_clt_test_tx_prep_write)
+TEST_CASE_SELF(ble_att_clt_test_tx_prep_write)
 {
     uint8_t attr_data[512];
     int i;
@@ -442,9 +462,11 @@ TEST_CASE(ble_att_clt_test_tx_prep_write)
                                    BLE_ATT_MTU_DFLT -
                                        BLE_ATT_PREP_WRITE_CMD_BASE_SZ + 1,
                                    BLE_HS_EINVAL);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_att_clt_test_rx_prep_write)
+TEST_CASE_SELF(ble_att_clt_test_rx_prep_write)
 {
     struct ble_att_prep_write_cmd rsp;
     uint16_t conn_handle;
@@ -470,9 +492,11 @@ TEST_CASE(ble_att_clt_test_rx_prep_write)
     rc = ble_hs_test_util_l2cap_rx_payload_flat(
         conn_handle, BLE_L2CAP_CID_ATT, buf, BLE_ATT_PREP_WRITE_CMD_BASE_SZ);
     TEST_ASSERT(rc == 0);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_att_clt_test_tx_exec_write)
+TEST_CASE_SELF(ble_att_clt_test_tx_exec_write)
 {
     uint16_t conn_handle;
     int rc;
@@ -486,9 +510,11 @@ TEST_CASE(ble_att_clt_test_tx_exec_write)
     /*** Success: nonzero == execute. */
     rc = ble_att_clt_tx_exec_write(conn_handle, 0x02);
     TEST_ASSERT(rc == 0);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_att_clt_test_tx_mtu)
+TEST_CASE_SELF(ble_att_clt_test_tx_mtu)
 {
     uint16_t conn_handle;
 
@@ -500,12 +526,12 @@ TEST_CASE(ble_att_clt_test_tx_mtu)
     /*** Error: repeated sends. */
     ble_att_clt_test_misc_tx_mtu(conn_handle, 50, BLE_HS_EALREADY);
     ble_att_clt_test_misc_tx_mtu(conn_handle, 60, BLE_HS_EALREADY);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
 TEST_SUITE(ble_att_clt_suite)
 {
-    tu_suite_set_post_test_cb(ble_hs_test_util_post_test, NULL);
-
     ble_att_clt_test_tx_find_info();
     ble_att_clt_test_rx_find_info();
     ble_att_clt_test_tx_read();
@@ -519,12 +545,4 @@ TEST_SUITE(ble_att_clt_suite)
     ble_att_clt_test_rx_prep_write();
     ble_att_clt_test_tx_exec_write();
     ble_att_clt_test_tx_mtu();
-}
-
-int
-ble_att_clt_test_all(void)
-{
-    ble_att_clt_suite();
-
-    return tu_any_failed;
 }

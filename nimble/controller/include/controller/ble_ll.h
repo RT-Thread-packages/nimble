@@ -56,27 +56,6 @@ extern "C" {
 #else
 #define BLE_LL_ASSERT(cond) assert(cond)
 #endif
-/*
- * XXX:
- * I guess this should not depend on the 32768 crystal to be honest. This
- * should be done for TIMER0 as well since the rf clock chews up more current.
- * Deal with this later.
- *
- * Another note: BLE_XTAL_SETTLE_TIME should be bsp related (I guess). There
- * should be a note in there that the converted usecs to ticks value of this
- * should not be 0. Thus: if you are using a 32.768 os cputime freq, the min
- * value of settle time should be 31 usecs. I would suspect all settling times
- * would exceed 31 usecs.
- */
-
-/* Determines if we need to turn on/off rf clock */
-#undef BLE_XCVR_RFCLK
-
-/* We will turn on/off rf clock */
-#if MYNEWT_VAL(BLE_XTAL_SETTLE_TIME) != 0
-#define BLE_XCVR_RFCLK
-
-#endif
 
 #if MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_2M_PHY) || MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_CODED_PHY)
 #define BLE_LL_BT5_PHY_SUPPORTED    (1)
@@ -90,6 +69,29 @@ extern "C" {
 /* Timing jitter as per spec is +/16 usecs */
 #define BLE_LL_JITTER_USECS         (16)
 
+
+#if MYNEWT_VAL(BLE_LL_SCA) < 0
+#error Invalid SCA value
+#elif MYNEWT_VAL(BLE_LL_SCA) <= 20
+#define BLE_LL_SCA_ENUM     7
+#elif MYNEWT_VAL(BLE_LL_SCA) <= 30
+#define BLE_LL_SCA_ENUM     6
+#elif MYNEWT_VAL(BLE_LL_SCA) <= 50
+#define BLE_LL_SCA_ENUM     5
+#elif MYNEWT_VAL(BLE_LL_SCA) <= 75
+#define BLE_LL_SCA_ENUM     4
+#elif MYNEWT_VAL(BLE_LL_SCA) <= 100
+#define BLE_LL_SCA_ENUM     3
+#elif MYNEWT_VAL(BLE_LL_SCA) <= 150
+#define BLE_LL_SCA_ENUM     2
+#elif MYNEWT_VAL(BLE_LL_SCA) <= 250
+#define BLE_LL_SCA_ENUM     1
+#elif MYNEWT_VAL(BLE_LL_SCA) <= 500
+#define BLE_LL_SCA_ENUM     0
+#else
+#error Invalid SCA value
+#endif
+
 /* Packet queue header definition */
 STAILQ_HEAD(ble_ll_pkt_q, os_mbuf_pkthdr);
 
@@ -101,7 +103,7 @@ STAILQ_HEAD(ble_ll_pkt_q, os_mbuf_pkthdr);
 struct ble_ll_obj
 {
     /* Supported features */
-    uint32_t ll_supp_features;
+    uint64_t ll_supp_features;
 
     /* Current Link Layer state */
     uint8_t ll_state;
@@ -115,13 +117,6 @@ struct ble_ll_obj
     /* Preferred PHY's */
     uint8_t ll_pref_tx_phys;
     uint8_t ll_pref_rx_phys;
-
-#ifdef BLE_XCVR_RFCLK
-    uint8_t ll_rfclk_state;
-    uint16_t ll_xtal_ticks;
-    uint32_t ll_rfclk_start_time;
-    struct hal_timer ll_rfclk_timer;
-#endif
 
     /* Task event queue */
     struct ble_npl_eventq ll_evq;
@@ -199,9 +194,21 @@ STATS_SECT_START(ble_ll_stats)
     STATS_SECT_ENTRY(aux_scan_rsp_err)
     STATS_SECT_ENTRY(aux_chain_cnt)
     STATS_SECT_ENTRY(aux_chain_err)
+    STATS_SECT_ENTRY(aux_scan_drop)
     STATS_SECT_ENTRY(adv_evt_dropped)
     STATS_SECT_ENTRY(scan_timer_stopped)
     STATS_SECT_ENTRY(scan_timer_restarted)
+    STATS_SECT_ENTRY(periodic_adv_drop_event)
+    STATS_SECT_ENTRY(periodic_chain_drop_event)
+    STATS_SECT_ENTRY(sync_event_failed)
+    STATS_SECT_ENTRY(sync_received)
+    STATS_SECT_ENTRY(sync_chain_failed)
+    STATS_SECT_ENTRY(sync_missed_err)
+    STATS_SECT_ENTRY(sync_crc_err)
+    STATS_SECT_ENTRY(sync_rx_buf_err)
+    STATS_SECT_ENTRY(sync_scheduled)
+    STATS_SECT_ENTRY(sched_state_sync_errs)
+    STATS_SECT_ENTRY(sched_invalid_pdu)
 STATS_SECT_END
 extern STATS_SECT_DECL(ble_ll_stats) ble_ll_stats;
 
@@ -209,37 +216,59 @@ extern STATS_SECT_DECL(ble_ll_stats) ble_ll_stats;
 #define BLE_LL_STATE_STANDBY        (0)
 #define BLE_LL_STATE_ADV            (1)
 #define BLE_LL_STATE_SCANNING       (2)
-#define BLE_LL_STATE_INITIATING     (3)
 #define BLE_LL_STATE_CONNECTION     (4)
 #define BLE_LL_STATE_DTM            (5)
+#define BLE_LL_STATE_SYNC           (6)
+#define BLE_LL_STATE_SCAN_AUX       (7)
 
 /* LL Features */
-#define BLE_LL_FEAT_LE_ENCRYPTION    (0x00000001)
-#define BLE_LL_FEAT_CONN_PARM_REQ    (0x00000002)
-#define BLE_LL_FEAT_EXTENDED_REJ     (0x00000004)
-#define BLE_LL_FEAT_SLAVE_INIT       (0x00000008)
-#define BLE_LL_FEAT_LE_PING          (0x00000010)
-#define BLE_LL_FEAT_DATA_LEN_EXT     (0x00000020)
-#define BLE_LL_FEAT_LL_PRIVACY       (0x00000040)
-#define BLE_LL_FEAT_EXT_SCAN_FILT    (0x00000080)
-#define BLE_LL_FEAT_LE_2M_PHY        (0x00000100)
-#define BLE_LL_FEAT_STABLE_MOD_ID_TX (0x00000200)
-#define BLE_LL_FEAT_STABLE_MOD_ID_RX (0x00000400)
-#define BLE_LL_FEAT_LE_CODED_PHY     (0x00000800)
-#define BLE_LL_FEAT_EXT_ADV          (0x00001000)
-#define BLE_LL_FEAT_PERIODIC_ADV     (0x00002000)
-#define BLE_LL_FEAT_CSA2             (0x00004000)
-#define BLE_LL_FEAT_LE_POWER_CLASS_1 (0x00008000)
-#define BLE_LL_FEAT_MIN_USED_CHAN    (0x00010000)
+#define BLE_LL_FEAT_LE_ENCRYPTION    (0x0000000001)
+#define BLE_LL_FEAT_CONN_PARM_REQ    (0x0000000002)
+#define BLE_LL_FEAT_EXTENDED_REJ     (0x0000000004)
+#define BLE_LL_FEAT_SLAVE_INIT       (0x0000000008)
+#define BLE_LL_FEAT_LE_PING          (0x0000000010)
+#define BLE_LL_FEAT_DATA_LEN_EXT     (0x0000000020)
+#define BLE_LL_FEAT_LL_PRIVACY       (0x0000000040)
+#define BLE_LL_FEAT_EXT_SCAN_FILT    (0x0000000080)
+#define BLE_LL_FEAT_LE_2M_PHY        (0x0000000100)
+#define BLE_LL_FEAT_STABLE_MOD_ID_TX (0x0000000200)
+#define BLE_LL_FEAT_STABLE_MOD_ID_RX (0x0000000400)
+#define BLE_LL_FEAT_LE_CODED_PHY     (0x0000000800)
+#define BLE_LL_FEAT_EXT_ADV          (0x0000001000)
+#define BLE_LL_FEAT_PERIODIC_ADV     (0x0000002000)
+#define BLE_LL_FEAT_CSA2             (0x0000004000)
+#define BLE_LL_FEAT_LE_POWER_CLASS_1 (0x0000008000)
+#define BLE_LL_FEAT_MIN_USED_CHAN    (0x0000010000)
+#define BLE_LL_FEAT_CTE_REQ          (0x0000020000)
+#define BLE_LL_FEAT_CTE_RSP          (0x0000040000)
+#define BLE_LL_FEAT_CTE_TX           (0x0000080000)
+#define BLE_LL_FEAT_CTE_RX           (0x0000100000)
+#define BLE_LL_FEAT_CTE_AOD          (0x0000200000)
+#define BLE_LL_FEAT_CTE_AOA          (0x0000400000)
+#define BLE_LL_FEAT_CTE_RECV         (0x0000800000)
+#define BLE_LL_FEAT_SYNC_TRANS_SEND  (0x0001000000)
+#define BLE_LL_FEAT_SYNC_TRANS_RECV  (0x0002000000)
+#define BLE_LL_FEAT_SCA_UPDATE       (0x0004000000)
+#define BLE_LL_FEAT_REM_PKEY         (0x0008000000)
+#define BLE_LL_FEAT_CIS_MASTER       (0x0010000000)
+#define BLE_LL_FEAT_CIS_SLAVE        (0x0020000000)
+#define BLE_LL_FEAT_ISO_BROADCASTER  (0x0040000000)
+#define BLE_LL_FEAT_SYNC_RECV        (0x0080000000)
+#define BLE_LL_FEAT_ISO_HOST_SUPPORT (0x0100000000)
+#define BLE_LL_FEAT_POWER_CTRL_REQ   (0x0200000000)
+#define BLE_LL_FEAT_POWER_CHANGE_IND (0x0400000000)
+#define BLE_LL_FEAT_PATH_LOSS_MON    (0x0800000000)
 
 /* This is initial mask, so if feature exchange will not happen,
  * but host will want to use this procedure, we will try. If not
  * succeed, feature bit will be cleared.
  * Look at LL Features above to find out what is allowed
  */
-#define BLE_LL_CONN_INITIAL_FEATURES    (0x00000002)
-
+#define BLE_LL_CONN_INITIAL_FEATURES    (0x00000022)
 #define BLE_LL_CONN_CLEAR_FEATURE(connsm, feature)   (connsm->conn_features &= ~(feature))
+
+/* All the features which can be controlled by the Host */
+#define BLE_LL_HOST_CONTROLLED_FEATURES (BLE_LL_FEAT_ISO_HOST_SUPPORT)
 
 /* LL timing */
 #define BLE_LL_IFS                  (150)       /* usecs */
@@ -300,14 +329,14 @@ struct ble_dev_addr
 #define BLE_ADV_PDU_TYPE_ADV_NONCONN_IND    (2)
 #define BLE_ADV_PDU_TYPE_SCAN_REQ           (3)
 #define BLE_ADV_PDU_TYPE_SCAN_RSP           (4)
-#define BLE_ADV_PDU_TYPE_CONNECT_REQ        (5)
+#define BLE_ADV_PDU_TYPE_CONNECT_IND        (5)
 #define BLE_ADV_PDU_TYPE_ADV_SCAN_IND       (6)
 #define BLE_ADV_PDU_TYPE_ADV_EXT_IND        (7)
 #define BLE_ADV_PDU_TYPE_AUX_ADV_IND        BLE_ADV_PDU_TYPE_ADV_EXT_IND
 #define BLE_ADV_PDU_TYPE_AUX_SCAN_RSP       BLE_ADV_PDU_TYPE_ADV_EXT_IND
 #define BLE_ADV_PDU_TYPE_AUX_SYNC_IND       BLE_ADV_PDU_TYPE_ADV_EXT_IND
 #define BLE_ADV_PDU_TYPE_AUX_CHAIN_IND      BLE_ADV_PDU_TYPE_ADV_EXT_IND
-#define BLE_ADV_PDU_TYPE_AUX_CONNECT_REQ    BLE_ADV_PDU_TYPE_CONNECT_REQ
+#define BLE_ADV_PDU_TYPE_AUX_CONNECT_REQ    BLE_ADV_PDU_TYPE_CONNECT_IND
 #define BLE_ADV_PDU_TYPE_AUX_SCAN_REQ       BLE_ADV_PDU_TYPE_SCAN_REQ
 #define BLE_ADV_PDU_TYPE_AUX_CONNECT_RSP    (8)
 
@@ -316,7 +345,7 @@ struct ble_dev_addr
 
 #define BLE_LL_EXT_ADV_ADVA_BIT         (0)
 #define BLE_LL_EXT_ADV_TARGETA_BIT      (1)
-#define BLE_LL_EXT_ADV_RFU_BIT          (2)
+#define BLE_LL_EXT_ADV_CTE_INFO_BIT     (2)
 #define BLE_LL_EXT_ADV_DATA_INFO_BIT    (3)
 #define BLE_LL_EXT_ADV_AUX_PTR_BIT      (4)
 #define BLE_LL_EXT_ADV_SYNC_INFO_BIT    (5)
@@ -325,6 +354,7 @@ struct ble_dev_addr
 #define BLE_LL_EXT_ADV_FLAGS_SIZE       (1)
 #define BLE_LL_EXT_ADV_ADVA_SIZE        (6)
 #define BLE_LL_EXT_ADV_TARGETA_SIZE     (6)
+#define BLE_LL_EXT_ADV_CTE_INFO_SIZE    (1)
 #define BLE_LL_EXT_ADV_DATA_INFO_SIZE   (2)
 #define BLE_LL_EXT_ADV_AUX_PTR_SIZE     (3)
 #define BLE_LL_EXT_ADV_SYNC_INFO_SIZE   (18)
@@ -367,6 +397,12 @@ struct ble_dev_addr
 #define BLE_LL_LLID_DATA_START          (2)
 #define BLE_LL_LLID_CTRL                (3)
 
+#define BLE_LL_LLID_IS_CTRL(hdr) \
+    (((hdr) & BLE_LL_DATA_HDR_LLID_MASK) == BLE_LL_LLID_CTRL)
+#define BLE_LL_LLID_IS_DATA(hdr) \
+    ((((hdr) & BLE_LL_DATA_HDR_LLID_MASK) == BLE_LL_LLID_DATA_START) || \
+     (((hdr) & BLE_LL_DATA_HDR_LLID_MASK) == BLE_LL_LLID_DATA_FRAG))
+
 /*
  * CONNECT_REQ
  *      -> InitA        (6 bytes)
@@ -405,6 +441,18 @@ struct ble_dev_addr
 #define BLE_SCAN_RSP_MAX_LEN        (37)
 #define BLE_SCAN_RSP_MAX_EXT_LEN    (251)
 
+#define BLE_LL_ADDR_SUBTYPE_IDENTITY    (0)
+#define BLE_LL_ADDR_SUBTYPE_RPA         (1)
+#define BLE_LL_ADDR_SUBTYPE_NRPA        (2)
+
+/* ACAD data types */
+#define BLE_LL_ACAD_CHANNEL_MAP_UPDATE_IND 0x28
+
+struct ble_ll_acad_channel_map_update_ind {
+    uint8_t map[5];
+    uint16_t instant;
+} __attribute__((packed));
+
 /*--- External API ---*/
 /* Initialize the Link Layer */
 void ble_ll_init(void);
@@ -412,8 +460,17 @@ void ble_ll_init(void);
 /* Reset the Link Layer */
 int ble_ll_reset(void);
 
+int ble_ll_is_valid_public_addr(const uint8_t *addr);
+
 /* 'Boolean' function returning true if address is a valid random address */
-int ble_ll_is_valid_random_addr(uint8_t *addr);
+int ble_ll_is_valid_random_addr(const uint8_t *addr);
+
+/*
+ * Check if given own_addr_type is valid for current controller configuration
+ * given the random address provided (when applicable)
+ */
+int ble_ll_is_valid_own_addr_type(uint8_t own_addr_type,
+                                  const uint8_t *random_addr);
 
 /* Calculate the amount of time in microseconds a PDU with payload length of
  * 'payload_len' will take to transmit on a PHY 'phy_mode'. */
@@ -424,7 +481,12 @@ uint32_t ble_ll_pdu_tx_time_get(uint16_t payload_len, int phy_mode);
 uint16_t ble_ll_pdu_max_tx_octets_get(uint32_t usecs, int phy_mode);
 
 /* Is this address a resolvable private address? */
-int ble_ll_is_rpa(uint8_t *addr, uint8_t addr_type);
+int ble_ll_is_rpa(const uint8_t *addr, uint8_t addr_type);
+
+int ble_ll_addr_subtype(const uint8_t *addr, uint8_t addr_type);
+
+/* Is this address an identity address? */
+int ble_ll_addr_is_id(uint8_t *addr, uint8_t addr_type);
 
 /* Is 'addr' our device address? 'addr_type' is public (0) or random (!=0) */
 int ble_ll_is_our_devaddr(uint8_t *addr, int addr_type);
@@ -440,12 +502,16 @@ uint8_t *ble_ll_get_our_devaddr(uint8_t addr_type);
 void ble_ll_acl_data_in(struct os_mbuf *txpkt);
 
 /**
- * Allocate a pdu (chain) for reception.
+ * Allocates mbuf for received PDU
  *
- * @param len Length of PDU. This includes the PDU header as well as payload.
- * Does not include MIC if encrypted.
+ * This allocated mbuf (may be chained if necessary) that has capacity large
+ * enough to store received PDU of given length. It does not set mbufs length
+ * as this has to be done by PHY when copying data.
  *
- * @return struct os_mbuf* Pointer to mbuf chain to hold received packet
+ * @param len  Length of PDU, including PDU header and excluding MIC (if encrypted)
+ *
+ * @return mbuf large enough to store received PDU on success
+ *         NULL on failure (oom)
  */
 struct os_mbuf *ble_ll_rxpdu_alloc(uint16_t len);
 
@@ -483,20 +549,26 @@ void ble_ll_event_send(struct ble_npl_event *ev);
 /* Hand received pdu's to LL task  */
 void ble_ll_rx_pdu_in(struct os_mbuf *rxpdu);
 
+/*
+ * Set public address
+ *
+ * This can be used to set controller public address from vendor specific storage,
+ * usually should be done in hal_bsp_init().
+ * Shall be *only* called before LL is initialized, i.e. before sysinit stage.
+ */
+int ble_ll_set_public_addr(const uint8_t *addr);
+
 /* Set random address */
-int ble_ll_set_random_addr(uint8_t *addr, bool hci_adv_ext);
-
-/* Enable wait for response timer */
-void ble_ll_wfr_enable(uint32_t cputime);
-
-/* Disable wait for response timer */
-void ble_ll_wfr_disable(void);
+int ble_ll_set_random_addr(const uint8_t *cmdbuf, uint8_t len, bool hci_adv_ext);
 
 /* Wait for response timer expiration callback */
 void ble_ll_wfr_timer_exp(void *arg);
 
 /* Read set of features supported by the Link Layer */
-uint32_t ble_ll_read_supp_features(void);
+uint64_t ble_ll_read_supp_features(void);
+
+/* Set host supported features */
+int ble_ll_set_host_feat(const uint8_t *cmdbuf, uint8_t len);
 
 /* Read set of states supported by the Link Layer */
 uint64_t ble_ll_read_supp_states(void);
@@ -511,6 +583,7 @@ void ble_ll_rand_sample(uint8_t rnum);
 int ble_ll_rand_data_get(uint8_t *buf, uint8_t len);
 void ble_ll_rand_prand_get(uint8_t *prand);
 int ble_ll_rand_start(void);
+uint32_t ble_ll_rand(void);
 
 static inline int
 ble_ll_get_addr_type(uint8_t txrxflag)
@@ -528,7 +601,7 @@ ble_ll_usecs_to_ticks_round_up(uint32_t usecs)
     return os_cputime_usecs_to_ticks(usecs + 30);
 }
 
-#if (MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_ENCRYPTION) == 1)
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_ENCRYPTION)
 /* LTK 0x4C68384139F574D836BCF34E9DFB01BF */
 extern const uint8_t g_bletest_LTK[];
 extern uint16_t g_bletest_EDIV;
@@ -539,8 +612,8 @@ extern uint32_t g_bletest_IVm;
 extern uint32_t g_bletest_IVs;
 #endif
 
-#if MYNEWT_VAL(BLE_LL_DIRECT_TEST_MODE)
-void ble_ll_dtm_init();
+#if MYNEWT_VAL(BLE_LL_DTM)
+void ble_ll_dtm_init(void);
 #endif
 
 #ifdef __cplusplus

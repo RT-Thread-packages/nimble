@@ -22,16 +22,14 @@
 #include "controller/ble_ll_test.h"
 #include "os/os.h"
 #include "testutil/testutil.h"
+#include "ble_ll_csa2_test.h"
 
 #if MYNEWT_VAL(SELFTEST)
 
 int
 main(int argc, char **argv)
 {
-    sysinit();
-
-    ble_ll_csa2_test_all();
-
+    ble_ll_csa2_test_suite();
     return tu_any_failed;
 }
 

@@ -22,6 +22,7 @@
 
 #include <stdint.h>
 #include <string.h>
+#include <assert.h>
 #include "os/os.h"
 
 #ifdef __cplusplus
@@ -146,43 +147,44 @@ ble_npl_event_get_arg(struct ble_npl_event *ev)
 static inline void
 ble_npl_event_set_arg(struct ble_npl_event *ev, void *arg)
 {
+    assert(ev->ev.ev_queued == 0);
     ev->ev.ev_arg = arg;
 }
 
 static inline ble_npl_error_t
 ble_npl_mutex_init(struct ble_npl_mutex *mu)
 {
-    return os_mutex_init(&mu->mu);
+    return (ble_npl_error_t)os_mutex_init(&mu->mu);
 }
 
 static inline ble_npl_error_t
 ble_npl_mutex_pend(struct ble_npl_mutex *mu, ble_npl_time_t timeout)
 {
-    return os_mutex_pend(&mu->mu, timeout);
+    return (ble_npl_error_t)os_mutex_pend(&mu->mu, timeout);
 }
 
 static inline ble_npl_error_t
 ble_npl_mutex_release(struct ble_npl_mutex *mu)
 {
-    return os_mutex_release(&mu->mu);
+    return (ble_npl_error_t)os_mutex_release(&mu->mu);
 }
 
 static inline ble_npl_error_t
 ble_npl_sem_init(struct ble_npl_sem *sem, uint16_t tokens)
 {
-    return os_sem_init(&sem->sem, tokens);
+    return (ble_npl_error_t)os_sem_init(&sem->sem, tokens);
 }
 
 static inline ble_npl_error_t
 ble_npl_sem_pend(struct ble_npl_sem *sem, ble_npl_time_t timeout)
 {
-    return os_sem_pend(&sem->sem, timeout);
+    return (ble_npl_error_t)os_sem_pend(&sem->sem, timeout);
 }
 
 static inline ble_npl_error_t
 ble_npl_sem_release(struct ble_npl_sem *sem)
 {
-    return os_sem_release(&sem->sem);
+    return (ble_npl_error_t)os_sem_release(&sem->sem);
 }
 
 static inline uint16_t
@@ -201,7 +203,7 @@ ble_npl_callout_init(struct ble_npl_callout *co, struct ble_npl_eventq *evq,
 static inline ble_npl_error_t
 ble_npl_callout_reset(struct ble_npl_callout *co, ble_npl_time_t ticks)
 {
-    return os_callout_reset(&co->co, ticks);
+    return (ble_npl_error_t)os_callout_reset(&co->co, ticks);
 }
 
 static inline void
@@ -245,7 +247,7 @@ ble_npl_time_get(void)
 static inline ble_npl_error_t
 ble_npl_time_ms_to_ticks(uint32_t ms, ble_npl_time_t *out_ticks)
 {
-    return os_time_ms_to_ticks(ms, out_ticks);
+    return (ble_npl_error_t)os_time_ms_to_ticks(ms, out_ticks);
 }
 
 static inline ble_npl_error_t

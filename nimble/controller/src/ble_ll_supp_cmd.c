@@ -36,7 +36,22 @@
 
 /* Octet 10 */
 #define BLE_SUPP_CMD_RD_TX_PWR              (0 << 2)
-#define BLE_LL_SUPP_CMD_OCTET_10            (BLE_SUPP_CMD_RD_TX_PWR)
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_CTRL_TO_HOST_FLOW_CONTROL)
+#define BLE_SUPP_CMD_SET_CTRL_TO_HOST_FLOW  (1 << 5)
+#define BLE_SUPP_CMD_HOST_BUFFER_SIZE       (1 << 6)
+#define BLE_SUPP_CMD_HOST_NUM_COMP_PACKETS  (1 << 7)
+#else
+#define BLE_SUPP_CMD_SET_CTRL_TO_HOST_FLOW  (0 << 5)
+#define BLE_SUPP_CMD_HOST_BUFFER_SIZE       (0 << 6)
+#define BLE_SUPP_CMD_HOST_NUM_COMP_PACKETS  (0 << 7)
+#endif
+#define BLE_LL_SUPP_CMD_OCTET_10            \
+(                                           \
+    BLE_SUPP_CMD_RD_TX_PWR              |   \
+    BLE_SUPP_CMD_SET_CTRL_TO_HOST_FLOW  |   \
+    BLE_SUPP_CMD_HOST_BUFFER_SIZE       |   \
+    BLE_SUPP_CMD_HOST_NUM_COMP_PACKETS      \
+)
 
 /* Octet 14 */
 #define BLE_SUPP_CMD_RD_LOC_VER             (1 << 3)
@@ -106,7 +121,7 @@
 #define BLE_SUPP_CMD_LE_SET_HOST_CHAN_CLASS (1 << 3)
 #define BLE_SUPP_CMD_LE_RD_CHAN_MAP         (1 << 4)
 #define BLE_SUPP_CMD_LE_RD_REM_USED_FEAT    (1 << 5)
-#if (MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_ENCRYPTION) == 1)
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_ENCRYPTION)
 #define BLE_SUPP_CMD_LE_ENCRYPT             (1 << 6)
 #else
 #define BLE_SUPP_CMD_LE_ENCRYPT             (0 << 6)
@@ -126,7 +141,7 @@
 )
 
 /* Octet 28 */
-#if (MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_ENCRYPTION) == 1)
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_ENCRYPTION)
 #define BLE_SUPP_CMD_LE_START_ENCRYPT       (1 << 0)
 #define BLE_SUPP_CMD_LE_LTK_REQ_REPLY       (1 << 1)
 #define BLE_SUPP_CMD_LE_LTK_REQ_NEG_REPLY   (1 << 2)
@@ -137,14 +152,15 @@
 #endif
 #define BLE_SUPP_CMD_LE_READ_SUPP_STATES    (1 << 3)
 
-#if MYNEWT_VAL(BLE_LL_DIRECT_TEST_MODE) == 0
-#define BLE_SUPP_CMD_LE_RX_TEST             (0 << 4)
-#define BLE_SUPP_CMD_LE_TX_TEST             (0 << 5)
-#define BLE_SUPP_CMD_LE_TEST_END            (0 << 6)
-#else
+#if MYNEWT_VAL(BLE_LL_DTM)
 #define BLE_SUPP_CMD_LE_RX_TEST             (1 << 4)
 #define BLE_SUPP_CMD_LE_TX_TEST             (1 << 5)
 #define BLE_SUPP_CMD_LE_TEST_END            (1 << 6)
+
+#else
+#define BLE_SUPP_CMD_LE_RX_TEST             (0 << 4)
+#define BLE_SUPP_CMD_LE_TX_TEST             (0 << 5)
+#define BLE_SUPP_CMD_LE_TEST_END            (0 << 6)
 #endif
 
 #define BLE_LL_SUPP_CMD_OCTET_28            \
@@ -161,7 +177,7 @@
 /* Octet 33 */
 #define BLE_SUPP_CMD_LE_REM_CONN_PRR        (1 << 4)
 #define BLE_SUPP_CMD_LE_REM_CONN_PRNR       (1 << 5)
-#if (MYNEWT_VAL(BLE_LL_CFG_FEAT_DATA_LEN_EXT) == 1)
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_DATA_LEN_EXT)
 #define BLE_SUPP_CMD_LE_SET_DATALEN         (1 << 6)
 #define BLE_SUPP_CMD_LE_RD_SUGG_DATALEN     (1 << 7)
 #else
@@ -178,14 +194,14 @@
 )
 
 /* Octet 34 */
-#if (MYNEWT_VAL(BLE_LL_CFG_FEAT_DATA_LEN_EXT) == 1)
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_DATA_LEN_EXT)
 #define BLE_SUPP_CMD_LE_WR_SUGG_DATALEN     (1 << 0)
 #else
 #define BLE_SUPP_CMD_LE_WR_SUGG_DATALEN     (0 << 0)
 #endif
 #define BLE_SUPP_CMD_LE_READ_LOCAL_P256_PK  (0 << 1)
 #define BLE_SUPP_CMD_LE_GENERATE_DH_KEY     (0 << 2)
-#if (MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_PRIVACY) == 1)
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_PRIVACY)
 #define BLE_SUPP_CMD_LE_ADD_RESOLV_LIST     (1 << 3)
 #define BLE_SUPP_CMD_LE_REMOVE_RESOLV_LIST  (1 << 4)
 #define BLE_SUPP_CMD_LE_CLEAR_RESOLV_LIST   (1 << 5)
@@ -212,7 +228,7 @@
 )
 
 /* Octet 35 */
-#if (MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_PRIVACY) == 1)
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_PRIVACY)
 #define BLE_SUPP_CMD_LE_RD_LOCAL_RESV_ADDR  (1 << 0)
 #define BLE_SUPP_CMD_LE_SET_ADDR_RES_EN     (1 << 1)
 #define BLE_SUPP_CMD_LE_SET_RESV_ADDR_TMO   (1 << 2)
@@ -232,10 +248,10 @@
 #define BLE_SUPP_CMD_LE_SET_PHY             (0 << 6)
 #endif
 
-#if MYNEWT_VAL(BLE_LL_DIRECT_TEST_MODE) == 0
-#define BLE_SUPP_CMD_LE_ENHANCED_RX_TEST    (0 << 7)
-#else
+#if MYNEWT_VAL(BLE_LL_DTM)
 #define BLE_SUPP_CMD_LE_ENHANCED_RX_TEST    (1 << 7)
+#else
+#define BLE_SUPP_CMD_LE_ENHANCED_RX_TEST    (0 << 7)
 #endif
 
 #define BLE_LL_SUPP_CMD_OCTET_35            \
@@ -251,13 +267,13 @@
 )
 
 /* Octet 36 */
-#if MYNEWT_VAL(BLE_LL_DIRECT_TEST_MODE) == 0
-#define BLE_SUPP_CMD_LE_ENHANCED_TX_TEST    (0 << 0)
-#else
+#if MYNEWT_VAL(BLE_LL_DTM)
 #define BLE_SUPP_CMD_LE_ENHANCED_TX_TEST    (1 << 0)
+#else
+#define BLE_SUPP_CMD_LE_ENHANCED_TX_TEST    (0 << 0)
 #endif
 
-#if (MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_EXT_ADV) == 1)
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_EXT_ADV)
 #define BLE_SUPP_CMD_LE_SET_ADVS_RAND_ADDR  (1 << 1)
 #define BLE_SUPP_CMD_LE_SET_EXT_ADV_PARAM   (1 << 2)
 #define BLE_SUPP_CMD_LE_SET_EXT_ADV_DATA    (1 << 3)
@@ -288,17 +304,23 @@
 )
 
 /* Octet 37 */
-#if (MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_EXT_ADV) == 1)
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_EXT_ADV)
 #define BLE_SUPP_CMD_LE_REMOVE_ADVS         (1 << 0)
 #define BLE_SUPP_CMD_LE_CLEAR_ADVS          (1 << 1)
 #else
 #define BLE_SUPP_CMD_LE_REMOVE_ADVS         (0 << 0)
 #define BLE_SUPP_CMD_LE_CLEAR_ADVS          (0 << 1)
 #endif
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_PERIODIC_ADV)
+#define BLE_SUPP_CMD_LE_SET_PADV_PARAM      (1 << 2)
+#define BLE_SUPP_CMD_LE_SET_PADV_DATA       (1 << 3)
+#define BLE_SUPP_CMD_LE_SET_PADV_ENABLE     (1 << 4)
+#else
 #define BLE_SUPP_CMD_LE_SET_PADV_PARAM      (0 << 2)
 #define BLE_SUPP_CMD_LE_SET_PADV_DATA       (0 << 3)
 #define BLE_SUPP_CMD_LE_SET_PADV_ENABLE     (0 << 4)
-#if (MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_EXT_ADV) == 1)
+#endif
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_EXT_ADV)
 #define BLE_SUPP_CMD_LE_SET_EXT_SCAN_PARAM  (1 << 5)
 #define BLE_SUPP_CMD_LE_SET_EXT_SCAN_ENABLE (1 << 6)
 #define BLE_SUPP_CMD_LE_EXT_CREATE_CONN     (1 << 7)
@@ -321,6 +343,15 @@
 )
 
 /* Octet 38 */
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_PERIODIC_ADV)
+#define BLE_SUPP_CMD_LE_PADV_CREATE_SYNC    (1 << 0)
+#define BLE_SUPP_CMD_LE_PADV_CREATE_SYNC_C  (1 << 1)
+#define BLE_SUPP_CMD_LE_PADV_TERMINATE_SYNC (1 << 2)
+#define BLE_SUPP_CMD_LE_ADD_PADV_LIST       (1 << 3)
+#define BLE_SUPP_CMD_LE_REMOVE_PADV_LIST    (1 << 4)
+#define BLE_SUPP_CMD_LE_CLEAR_PADV_LIST     (1 << 5)
+#define BLE_SUPP_CMD_LE_RD_PADV_LIST_SIZE   (1 << 6)
+#else
 #define BLE_SUPP_CMD_LE_PADV_CREATE_SYNC    (0 << 0)
 #define BLE_SUPP_CMD_LE_PADV_CREATE_SYNC_C  (0 << 1)
 #define BLE_SUPP_CMD_LE_PADV_TERMINATE_SYNC (0 << 2)
@@ -328,7 +359,8 @@
 #define BLE_SUPP_CMD_LE_REMOVE_PADV_LIST    (0 << 4)
 #define BLE_SUPP_CMD_LE_CLEAR_PADV_LIST     (0 << 5)
 #define BLE_SUPP_CMD_LE_RD_PADV_LIST_SIZE   (0 << 6)
-#define BLE_SUPP_CMD_LE_RD_TX_POWER         (0 << 7)
+#endif
+#define BLE_SUPP_CMD_LE_RD_TX_POWER         (1 << 7)
 
 #define BLE_LL_SUPP_CMD_OCTET_38            \
 (                                           \
@@ -343,9 +375,9 @@
 )
 
 /* Octet 39 */
-#define BLE_SUPP_CMD_LE_RD_RF_PATH_COMP     (0 << 0)
-#define BLE_SUPP_CMD_LE_WR_RF_PATH_COMP     (0 << 1)
-#if (MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_PRIVACY) == 1)
+#define BLE_SUPP_CMD_LE_RD_RF_PATH_COMP     (1 << 0)
+#define BLE_SUPP_CMD_LE_WR_RF_PATH_COMP     (1 << 1)
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_PRIVACY)
 #define BLE_SUPP_CMD_LE_SET_PRIVACY_MODE    (1 << 2)
 #else
 #define BLE_SUPP_CMD_LE_SET_PRIVACY_MODE    (0 << 2)
@@ -356,6 +388,108 @@
     BLE_SUPP_CMD_LE_RD_RF_PATH_COMP     |   \
     BLE_SUPP_CMD_LE_WR_RF_PATH_COMP     |   \
     BLE_SUPP_CMD_LE_SET_PRIVACY_MODE        \
+)
+
+/* Octet 40 */
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_PERIODIC_ADV) && MYNEWT_VAL(BLE_VERSION) >= 51
+#define BLE_SUPP_CMD_LE_PADV_RECV_ENABLE (1 << 5)
+#else
+#define BLE_SUPP_CMD_LE_PADV_RECV_ENABLE (0 << 5)
+#endif
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_PERIODIC_ADV_SYNC_TRANSFER)
+#define BLE_SUPP_CMD_LE_PADV_SYNC_TRANSFER (1 << 6)
+#define BLE_SUPP_CMD_LE_PADV_SET_INFO_TRANSFER (1 << 7)
+#else
+#define BLE_SUPP_CMD_LE_PADV_SYNC_TRANSFER (0 << 6)
+#define BLE_SUPP_CMD_LE_PADV_SET_INFO_TRANSFER (0 << 7)
+#endif
+
+#define BLE_LL_SUPP_CMD_OCTET_40             \
+(                                            \
+    BLE_SUPP_CMD_LE_PADV_RECV_ENABLE       | \
+    BLE_SUPP_CMD_LE_PADV_SYNC_TRANSFER     | \
+    BLE_SUPP_CMD_LE_PADV_SET_INFO_TRANSFER   \
+)
+
+/* Octet 41 */
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_PERIODIC_ADV_SYNC_TRANSFER)
+#define BLE_SUPP_CMD_LE_PADV_SYNC_TRANSFER_PARAMS (1 << 0)
+#define BLE_SUPP_CMD_LE_PADV_DEFAULT_SYNC_TRANSFER_PARAMS (1 << 1)
+#else
+#define BLE_SUPP_CMD_LE_PADV_SYNC_TRANSFER_PARAMS (0 << 0)
+#define BLE_SUPP_CMD_LE_PADV_DEFAULT_SYNC_TRANSFER_PARAMS (0 << 1)
+#endif
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_ISO)
+#define BLE_SUPP_CMD_LE_READ_BUF_SIZE_V2    (1 << 5)
+#define BLE_SUPP_CMD_LE_READ_ISO_TX_SYNC    (1 << 6)
+#define BLE_SUPP_CMD_LE_SET_CIG_PARAM       (1 << 7)
+#else
+#define BLE_SUPP_CMD_LE_READ_BUF_SIZE_V2    (0 << 5)
+#define BLE_SUPP_CMD_LE_READ_ISO_TX_SYNC    (0 << 6)
+#define BLE_SUPP_CMD_LE_SET_CIG_PARAM       (0 << 7)
+#endif
+
+#define BLE_LL_SUPP_CMD_OCTET_41                        \
+(                                                       \
+    BLE_SUPP_CMD_LE_PADV_SYNC_TRANSFER_PARAMS         | \
+    BLE_SUPP_CMD_LE_PADV_DEFAULT_SYNC_TRANSFER_PARAMS | \
+    BLE_SUPP_CMD_LE_READ_BUF_SIZE_V2                  | \
+    BLE_SUPP_CMD_LE_READ_ISO_TX_SYNC                  | \
+    BLE_SUPP_CMD_LE_SET_CIG_PARAM                       \
+)
+
+/* Octet 42 */
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_ISO)
+#define BLE_SUPP_CMD_LE_SET_CIG_PARAM_TEST  (1 << 0)
+#define BLE_SUPP_CMD_LE_CREATE_CIS          (1 << 1)
+#define BLE_SUPP_CMD_LE_REMOVE_CIG          (1 << 2)
+#define BLE_SUPP_CMD_LE_ACCEPT_CIS_REQ      (1 << 3)
+#define BLE_SUPP_CMD_LE_REJECT_CIS_REQ      (1 << 4)
+#define BLE_SUPP_CMD_LE_CREATE_BIG          (1 << 5)
+#define BLE_SUPP_CMD_LE_CREATE_BIG_TEST     (1 << 6)
+#define BLE_SUPP_CMD_LE_TERMINATE_BIG       (1 << 7)
+#else
+#define BLE_SUPP_CMD_LE_SET_CIG_PARAM_TEST  (0 << 0)
+#define BLE_SUPP_CMD_LE_CREATE_CIS          (0 << 1)
+#define BLE_SUPP_CMD_LE_REMOVE_CIG          (0 << 2)
+#define BLE_SUPP_CMD_LE_ACCEPT_CIS_REQ      (0 << 3)
+#define BLE_SUPP_CMD_LE_REJECT_CIS_REQ      (0 << 4)
+#define BLE_SUPP_CMD_LE_CREATE_BIG          (0 << 5)
+#define BLE_SUPP_CMD_LE_CREATE_BIG_TEST     (0 << 6)
+#define BLE_SUPP_CMD_LE_TERMINATE_BIG       (0 << 7)
+#endif
+#define BLE_LL_SUPP_CMD_OCTET_42         \
+(                                        \
+    BLE_SUPP_CMD_LE_SET_CIG_PARAM_TEST | \
+    BLE_SUPP_CMD_LE_CREATE_CIS         | \
+    BLE_SUPP_CMD_LE_REMOVE_CIG         | \
+    BLE_SUPP_CMD_LE_ACCEPT_CIS_REQ     | \
+    BLE_SUPP_CMD_LE_REJECT_CIS_REQ     | \
+    BLE_SUPP_CMD_LE_CREATE_BIG         | \
+    BLE_SUPP_CMD_LE_CREATE_BIG_TEST    | \
+    BLE_SUPP_CMD_LE_TERMINATE_BIG        \
+)
+
+/* Octet 43 */
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_SCA_UPDATE)
+#define BLE_SUPP_CMD_LE_REQUEST_PEER_SCA (1 << 2)
+#else
+#define BLE_SUPP_CMD_LE_REQUEST_PEER_SCA (0 << 0)
+#endif
+#define BLE_LL_SUPP_CMD_OCTET_43                        \
+(                                                       \
+    BLE_SUPP_CMD_LE_REQUEST_PEER_SCA  \
+)
+
+/* Octet 44 */
+#if MYNEWT_VAL(BLE_VERSION) >= 52
+#define BLE_SUPP_CMD_LE_SET_HOST_FEATURE (1 << 0)
+#else
+#define BLE_SUPP_CMD_LE_SET_HOST_FEATURE (0 << 0)
+#endif
+#define BLE_LL_SUPP_CMD_OCTET_44                        \
+(                                                       \
+    BLE_SUPP_CMD_LE_SET_HOST_FEATURE  \
 )
 
 /* Defines the array of supported commands */
@@ -401,4 +535,9 @@ const uint8_t g_ble_ll_supp_cmds[BLE_LL_SUPP_CMD_LEN] =
     BLE_LL_SUPP_CMD_OCTET_37,
     BLE_LL_SUPP_CMD_OCTET_38,
     BLE_LL_SUPP_CMD_OCTET_39,
+    BLE_LL_SUPP_CMD_OCTET_40,           /* Octet 40 */
+    BLE_LL_SUPP_CMD_OCTET_41,
+    BLE_LL_SUPP_CMD_OCTET_42,
+    BLE_LL_SUPP_CMD_OCTET_43,
+    BLE_LL_SUPP_CMD_OCTET_44,
 };

@@ -21,7 +21,7 @@
 #include <errno.h>
 #include <string.h>
 #include "testutil/testutil.h"
-#include "host/ble_hs_test.h"
+#include "ble_hs_test.h"
 #include "ble_hs_test_util.h"
 
 #define BLE_HS_PVCY_TEST_MAX_GAP_EVENTS 256
@@ -240,7 +240,7 @@ ble_hs_pvcy_test_util_restore_irk(const struct ble_store_value_sec *value_sec,
                                             connecting);
 }
 
-TEST_CASE(ble_hs_pvcy_test_case_restore_irks)
+TEST_CASE_SELF(ble_hs_pvcy_test_case_restore_irks)
 {
     struct ble_store_value_sec value_sec1;
     struct ble_store_value_sec value_sec2;
@@ -291,19 +291,23 @@ TEST_CASE(ble_hs_pvcy_test_case_restore_irks)
                                             value_sec2.irk,
                                             ble_hs_pvcy_default_irk,
                                             false, false);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
 /** No active GAP procedures. */
-TEST_CASE(ble_hs_pvcy_test_case_add_irk_idle)
+TEST_CASE_SELF(ble_hs_pvcy_test_case_add_irk_idle)
 {
     ble_hs_pvcy_test_util_init();
 
     ble_hs_pvcy_test_util_add_arbitrary_irk(false, false);
     TEST_ASSERT(ble_hs_pvcy_test_num_gap_events == 0);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
 /*** Advertising active. */
-TEST_CASE(ble_hs_pvcy_test_case_add_irk_adv)
+TEST_CASE_SELF(ble_hs_pvcy_test_case_add_irk_adv)
 {
     int rc;
 
@@ -327,10 +331,12 @@ TEST_CASE(ble_hs_pvcy_test_case_add_irk_adv)
 
     /* Ensure GAP procedures are no longer preempted. */
     ble_hs_pvcy_test_util_all_gap_procs(0, 0, 0);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
 /*** Discovery active. */
-TEST_CASE(ble_hs_pvcy_test_case_add_irk_disc)
+TEST_CASE_SELF(ble_hs_pvcy_test_case_add_irk_disc)
 {
     struct ble_gap_disc_params disc_params;
     int rc;
@@ -354,10 +360,12 @@ TEST_CASE(ble_hs_pvcy_test_case_add_irk_disc)
 
     /* Ensure GAP procedures are no longer preempted. */
     ble_hs_pvcy_test_util_all_gap_procs(0, 0, 0);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
 /*** Connect active. */
-TEST_CASE(ble_hs_pvcy_test_case_add_irk_conn)
+TEST_CASE_SELF(ble_hs_pvcy_test_case_add_irk_conn)
 {
     ble_addr_t peer_addr;
     int rc;
@@ -392,10 +400,12 @@ TEST_CASE(ble_hs_pvcy_test_case_add_irk_conn)
 
     /* Ensure GAP procedures are no longer preempted. */
     ble_hs_pvcy_test_util_all_gap_procs(0, 0, 0);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
 /*** Advertising and discovery active. */
-TEST_CASE(ble_hs_pvcy_test_case_add_irk_adv_disc)
+TEST_CASE_SELF(ble_hs_pvcy_test_case_add_irk_adv_disc)
 {
     struct ble_gap_disc_params disc_params;
     int rc;
@@ -431,10 +441,12 @@ TEST_CASE(ble_hs_pvcy_test_case_add_irk_adv_disc)
 
     /* Ensure GAP procedures are no longer preempted. */
     ble_hs_pvcy_test_util_all_gap_procs(0, 0, 0);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
 /*** Advertising and connecting active. */
-TEST_CASE(ble_hs_pvcy_test_case_add_irk_adv_conn)
+TEST_CASE_SELF(ble_hs_pvcy_test_case_add_irk_adv_conn)
 {
     ble_addr_t peer_addr;
     int rc;
@@ -481,12 +493,12 @@ TEST_CASE(ble_hs_pvcy_test_case_add_irk_adv_conn)
 
     /* Ensure GAP procedures are no longer preempted. */
     ble_hs_pvcy_test_util_all_gap_procs(0, 0, 0);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
 TEST_SUITE(ble_hs_pvcy_test_suite_irk)
 {
-    tu_suite_set_post_test_cb(ble_hs_test_util_post_test, NULL);
-
     ble_hs_pvcy_test_case_restore_irks();
     ble_hs_pvcy_test_case_add_irk_idle();
     ble_hs_pvcy_test_case_add_irk_adv();
@@ -494,12 +506,4 @@ TEST_SUITE(ble_hs_pvcy_test_suite_irk)
     ble_hs_pvcy_test_case_add_irk_conn();
     ble_hs_pvcy_test_case_add_irk_adv_disc();
     ble_hs_pvcy_test_case_add_irk_adv_conn();
-}
-
-int
-ble_hs_pvcy_test_all(void)
-{
-    ble_hs_pvcy_test_suite_irk();
-
-    return tu_any_failed;
 }

@@ -45,7 +45,7 @@ static uint8_t g_ble_hw_whitelist_mask;
 ble_rng_isr_cb_t g_ble_rng_isr_cb;
 
 /* If LL privacy is enabled, allocate memory for AAR */
-#if (MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_PRIVACY) == 1)
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_PRIVACY)
 
 /* The NRF51 supports up to 16 IRK entries */
 #if (MYNEWT_VAL(BLE_LL_RESOLV_LIST_SIZE) < 16)
@@ -66,33 +66,22 @@ uint8_t g_nrf_num_irks;
 int
 ble_hw_get_public_addr(ble_addr_t *addr)
 {
-    int rc;
     uint32_t addr_high;
     uint32_t addr_low;
 
     /* Does FICR have a public address */
-    rc = -1;
-    if ((NRF_FICR->DEVICEADDRTYPE & 1) == 0) {
-        addr_low = NRF_FICR->DEVICEADDR[0];
-        addr_high = NRF_FICR->DEVICEADDR[1];
-        rc = 0;
-    } else {
-        /* See if programmed in UICR. Upper 16 bits must all be zero */
-        addr_high = NRF_UICR->CUSTOMER[1];
-        if (addr_high < 65536) {
-            addr_low = NRF_UICR->CUSTOMER[0];
-            rc = 0;
-        }
+    if ((NRF_FICR->DEVICEADDRTYPE & 1) != 0) {
+        return -1;
     }
 
-    if (!rc) {
-        /* Copy into device address. We can do this because we know platform */
-        memcpy(addr->val, &addr_low, 4);
-        memcpy(&addr->val[4], &addr_high, 2);
-        addr->type = BLE_ADDR_PUBLIC;
-    }
+    /* Copy into device address. We can do this because we know platform */
+    addr_low = NRF_FICR->DEVICEADDR[0];
+    addr_high = NRF_FICR->DEVICEADDR[1];
+    memcpy(addr->val, &addr_low, 4);
+    memcpy(&addr->val[4], &addr_high, 2);
+    addr->type = BLE_ADDR_PUBLIC;
 
-    return rc;
+    return 0;
 }
 
 /* Returns random static address or -1 if not present */
@@ -135,7 +124,7 @@ ble_hw_whitelist_clear(void)
  * @return int 0: success, BLE error code otherwise
  */
 int
-ble_hw_whitelist_add(uint8_t *addr, uint8_t addr_type)
+ble_hw_whitelist_add(const uint8_t *addr, uint8_t addr_type)
 {
     int i;
     uint32_t mask;
@@ -166,7 +155,7 @@ ble_hw_whitelist_add(uint8_t *addr, uint8_t addr_type)
  *
  */
 void
-ble_hw_whitelist_rmv(uint8_t *addr, uint8_t addr_type)
+ble_hw_whitelist_rmv(const uint8_t *addr, uint8_t addr_type)
 {
     int i;
     uint8_t cfg_addr;
@@ -330,7 +319,9 @@ ble_hw_rng_init(ble_rng_isr_cb_t cb, int bias)
 
     /* If we were passed a function pointer we need to enable the interrupt */
     if (cb != NULL) {
+#ifndef RIOT_VERSION
         NVIC_SetPriority(RNG_IRQn, (1 << __NVIC_PRIO_BITS) - 1);
+#endif
 #if MYNEWT
         NVIC_SetVector(RNG_IRQn, (uint32_t)ble_rng_isr);
 #else
@@ -405,7 +396,7 @@ ble_hw_rng_read(void)
     return rnum;
 }
 
-#if (MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_PRIVACY))
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_PRIVACY)
 /**
  * Clear the resolving list
  *
@@ -457,7 +448,7 @@ ble_hw_resolv_list_rmv(int index)
         --g_nrf_num_irks;
         irk_entry = &g_nrf_irk_list[index];
         if (g_nrf_num_irks > index) {
-            memmove(irk_entry, irk_entry + 4, g_nrf_num_irks - index);
+            memmove(irk_entry, irk_entry + 4, 16 * (g_nrf_num_irks - index));
         }
     }
 }
@@ -483,13 +474,8 @@ ble_hw_resolv_list_size(void)
 int
 ble_hw_resolv_list_match(void)
 {
-    uint32_t index;
-
-    if (NRF_AAR->EVENTS_END) {
-        if (NRF_AAR->EVENTS_RESOLVED) {
-            index = NRF_AAR->STATUS;
-            return (int)index;
-        }
+    if (NRF_AAR->ENABLE && NRF_AAR->EVENTS_END && NRF_AAR->EVENTS_RESOLVED) {
+        return (int)NRF_AAR->STATUS;
     }
 
     return -1;

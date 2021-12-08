@@ -21,6 +21,12 @@
 #define H_BLE_HS_LOG_
 
 #include "modlog/modlog.h"
+#include "log/log.h"
+
+/* Only include the logcfg header if this version of newt can generate it. */
+#if MYNEWT_VAL(NEWT_FEATURE_LOGCFG)
+#include "logcfg/logcfg.h"
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -29,12 +35,13 @@ extern "C" {
 struct os_mbuf;
 
 #define BLE_HS_LOG(lvl, ...) \
-    MODLOG_ ## lvl(LOG_MODULE_NIMBLE_HOST, __VA_ARGS__)
+    BLE_HS_LOG_ ## lvl(__VA_ARGS__)
 
 #define BLE_HS_LOG_ADDR(lvl, addr)                      \
-    BLE_HS_LOG(lvl, "%02x:%02x:%02x:%02x:%02x:%02x",    \
-               (addr)[5], (addr)[4], (addr)[3],         \
-               (addr)[2], (addr)[1], (addr)[0])
+    BLE_HS_LOG_ ## lvl("%02x:%02x:%02x:%02x:%02x:%02x", \
+                       (addr)[5], (addr)[4], (addr)[3], \
+                       (addr)[2], (addr)[1], (addr)[0])
+
 
 void ble_hs_log_mbuf(const struct os_mbuf *om);
 void ble_hs_log_flat_buf(const void *data, int len);

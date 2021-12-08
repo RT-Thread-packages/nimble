@@ -216,21 +216,22 @@ ble_hs_test_util_create_rpa_conn(uint16_t handle, uint8_t own_addr_type,
                                  ble_gap_event_fn *cb, void *cb_arg)
 {
     ble_addr_t addr;
-    struct hci_le_conn_complete evt;
-    struct hci_le_rd_rem_supp_feat_complete evt2;
+    struct ble_gap_conn_complete evt;
+    struct ble_hci_ev_le_subev_rd_rem_used_feat evt2;
     int rc;
 
     addr.type = peer_addr_type;
     memcpy(addr.val, peer_id_addr, 6);
 
-    ble_hs_test_util_connect(own_addr_type, &addr, 0, NULL, cb, cb_arg, 0);
+    rc = ble_hs_test_util_connect(own_addr_type, &addr, 0, NULL, cb, cb_arg,
+                                  0);
+    TEST_ASSERT_FATAL(rc == 0);
 
     /* ble_gap_rx_conn_complete() will send extra HCI command, need phony ack */
     ble_hs_test_util_hci_ack_set(ble_hs_hci_util_opcode_join(BLE_HCI_OGF_LE,
                              BLE_HCI_OCF_LE_RD_REM_FEAT), 0);
 
     memset(&evt, 0, sizeof evt);
-    evt.subevent_code = BLE_HCI_LE_SUBEV_CONN_COMPLETE;
     evt.status = BLE_ERR_SUCCESS;
     evt.connection_handle = handle;
     evt.role = BLE_HCI_LE_CONN_COMPLETE_ROLE_MASTER;
@@ -245,9 +246,9 @@ ble_hs_test_util_create_rpa_conn(uint16_t handle, uint8_t own_addr_type,
     rc = ble_gap_rx_conn_complete(&evt, 0);
     TEST_ASSERT(rc == 0);
 
-    evt2.subevent_code = BLE_HCI_LE_SUBEV_RD_REM_USED_FEAT;
+    evt2.subev_code = BLE_HCI_LE_SUBEV_RD_REM_USED_FEAT;
     evt2.status = BLE_ERR_SUCCESS;
-    evt2.connection_handle = handle;
+    evt2.conn_handle = htole16(handle);
     memcpy(evt2.features, ((uint8_t[]){ conn_features, 0, 0, 0, 0, 0, 0, 0 }),
            8);
 
@@ -363,17 +364,14 @@ ble_hs_test_util_conn_terminate(uint16_t conn_handle, uint8_t hci_status)
 void
 ble_hs_test_util_conn_disconnect(uint16_t conn_handle)
 {
-    struct hci_disconn_complete evt;
     int rc;
 
     rc = ble_hs_test_util_conn_terminate(conn_handle, 0);
     TEST_ASSERT_FATAL(rc == 0);
 
     /* Receive disconnection complete event. */
-    evt.connection_handle = conn_handle;
-    evt.status = 0;
-    evt.reason = BLE_ERR_CONN_TERM_LOCAL;
-    ble_hs_test_util_hci_rx_disconn_complete_event(&evt);
+    ble_hs_test_util_hci_rx_disconn_complete_event(conn_handle, 0,
+                                                   BLE_ERR_CONN_TERM_LOCAL);
 }
 
 int
@@ -1588,6 +1586,7 @@ ble_hs_test_util_set_static_rnd_addr(const uint8_t *addr)
         BLE_HS_TEST_UTIL_LE_OPCODE(BLE_HCI_OCF_LE_SET_RAND_ADDR), 0);
 
     rc = ble_hs_id_set_rnd(addr);
+
     TEST_ASSERT_FATAL(rc == 0);
 
     ble_hs_test_util_hci_out_first();
@@ -1736,6 +1735,18 @@ ble_hs_test_util_mbuf_chain_len(const struct os_mbuf *om)
     return count;
 }
 
+static int
+ble_hs_test_util_num_mbufs(void)
+{
+    return os_msys_count() + ble_hs_hci_frag_num_mbufs();
+}
+
+static int
+ble_hs_test_util_num_mbufs_free(void)
+{
+    return os_msys_num_free() + ble_hs_hci_frag_num_mbufs_free();
+}
+
 struct os_mbuf *
 ble_hs_test_util_mbuf_alloc_all_but(int count)
 {
@@ -1785,7 +1796,7 @@ ble_hs_test_util_mbuf_count(const struct ble_hs_test_util_mbuf_params *params)
 
     ble_hs_process_rx_data_queue();
 
-    count = os_msys_num_free();
+    count = ble_hs_test_util_num_mbufs_free();
 
     if (params->prev_tx) {
         count += ble_hs_test_util_mbuf_chain_len(ble_hs_test_util_prev_tx_cur);
@@ -1836,13 +1847,7 @@ ble_hs_test_util_assert_mbufs_freed(
     }
 
     count = ble_hs_test_util_mbuf_count(params);
-    TEST_ASSERT(count == os_msys_count());
-}
-
-void
-ble_hs_test_util_post_test(void *arg)
-{
-    ble_hs_test_util_assert_mbufs_freed(arg);
+    TEST_ASSERT(count == ble_hs_test_util_num_mbufs());
 }
 
 static int
@@ -2036,7 +2041,8 @@ ble_hs_test_util_init(void)
     TEST_ASSERT_FATAL(rc == 0);
 
     ble_hs_test_util_hci_out_clear();
+    ble_hs_test_util_hci_acks_clear();
 
     /* Clear random address. */
-    ble_hs_test_util_set_static_rnd_addr((uint8_t[6]){ 0, 0, 0, 0, 0, 0 });
+    ble_hs_id_rnd_reset();
 }

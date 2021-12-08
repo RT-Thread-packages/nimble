@@ -9,6 +9,9 @@
 #define __NUMBLE_CONFIG_H__
 
 #include <rtconfig.h>
+#include "os/util.h"
+#include "console/console.h"
+
 
 /**
  * Bluetooth role support
@@ -99,7 +102,15 @@
 #endif
 
 #ifdef PKG_NIMBLE_BSP_NRF52
+
 #define MYNEWT_VAL_BSP_NRF52                     (1)
+
+#define MYNEWT_VAL_TIMER_0 0
+#define MYNEWT_VAL_TIMER_5 1
+#define MYNEWT_VAL_OS_CPUTIME_FREQ 32768
+#define MYNEWT_VAL_OS_CPUTIME_TIMER_NUM 5
+#define MYNEWT_VAL_BLE_LL_RFMGMT_ENABLE_TIME 1500
+
 #endif
 
 #ifdef PKG_NIMBLE_BSP_NRF52840

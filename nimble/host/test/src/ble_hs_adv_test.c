@@ -23,10 +23,13 @@
 #include "testutil/testutil.h"
 #include "nimble/hci_common.h"
 #include "host/ble_hs_adv.h"
-#include "host/ble_hs_test.h"
+#include "ble_hs_test.h"
 #include "ble_hs_test_util.h"
 
 #define BLE_ADV_TEST_DATA_OFF   4
+
+#define BLE_HCI_SET_ADV_DATA_LEN            (32)
+#define BLE_HCI_SET_SCAN_RSP_DATA_LEN       (32)
 
 static void
 ble_hs_adv_test_misc_verify_tx_adv_data_hdr(uint8_t *cmd, int data_len)
@@ -177,7 +180,7 @@ ble_hs_adv_test_misc_tx_and_verify_data(
     ble_hs_test_util_hci_out_last();
 }
 
-TEST_CASE(ble_hs_adv_test_case_user)
+TEST_CASE_SELF(ble_hs_adv_test_case_user)
 {
     struct ble_hs_adv_fields adv_fields;
     struct ble_hs_adv_fields rsp_fields;
@@ -678,9 +681,11 @@ TEST_CASE(ble_hs_adv_test_case_user)
             },
             { 0 },
         }, &rsp_fields, NULL);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_hs_adv_test_case_user_rsp)
+TEST_CASE_SELF(ble_hs_adv_test_case_user_rsp)
 {
     struct ble_hs_adv_fields rsp_fields;
     struct ble_hs_adv_fields adv_fields;
@@ -1216,9 +1221,11 @@ TEST_CASE(ble_hs_adv_test_case_user_rsp)
             },
             { 0 },
         });
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_hs_adv_test_case_user_full_payload)
+TEST_CASE_SELF(ble_hs_adv_test_case_user_full_payload)
 {
     /* Intentionally allocate an extra byte. */
     static const uint8_t mfg_data[30] = {
@@ -1261,22 +1268,13 @@ TEST_CASE(ble_hs_adv_test_case_user_full_payload)
     adv_fields.mfg_data_len = 30;
     rc = ble_gap_adv_set_fields(&adv_fields);
     TEST_ASSERT(rc == BLE_HS_EMSGSIZE);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
 TEST_SUITE(ble_hs_adv_test_suite)
 {
-    tu_suite_set_post_test_cb(ble_hs_test_util_post_test, NULL);
-
     ble_hs_adv_test_case_user();
     ble_hs_adv_test_case_user_rsp();
     ble_hs_adv_test_case_user_full_payload();
 }
-
-int
-ble_hs_adv_test_all(void)
-{
-    ble_hs_adv_test_suite();
-
-    return tu_any_failed;
-}
-

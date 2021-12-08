@@ -20,6 +20,8 @@
 #include <string.h>
 #include "ble_hs_priv.h"
 
+#if NIMBLE_BLE_CONNECT
+/* this function consumes tx os_mbuf */
 int
 ble_l2cap_sig_tx(uint16_t conn_handle, struct os_mbuf *txom)
 {
@@ -28,9 +30,13 @@ ble_l2cap_sig_tx(uint16_t conn_handle, struct os_mbuf *txom)
     int rc;
 
     ble_hs_lock();
-    ble_hs_misc_conn_chan_find_reqd(conn_handle, BLE_L2CAP_CID_SIG,
-                                    &conn, &chan);
-    rc = ble_l2cap_tx(conn, chan, txom);
+    rc = ble_hs_misc_conn_chan_find_reqd(conn_handle, BLE_L2CAP_CID_SIG,
+                                         &conn, &chan);
+    if (rc == 0) {
+        rc = ble_l2cap_tx(conn, chan, txom);
+    } else {
+        os_mbuf_free_chain(txom);
+    }
     ble_hs_unlock();
 
     return rc;
@@ -110,3 +116,5 @@ ble_l2cap_sig_cmd_get(uint8_t opcode, uint8_t id, uint16_t len,
 
     return hdr->data;
 }
+
+#endif

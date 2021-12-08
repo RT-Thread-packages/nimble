@@ -22,7 +22,7 @@
 #include <limits.h>
 #include "testutil/testutil.h"
 #include "nimble/ble.h"
-#include "host/ble_hs_test.h"
+#include "ble_hs_test.h"
 #include "host/ble_gatt.h"
 #include "host/ble_uuid.h"
 #include "ble_hs_test_util.h"
@@ -256,7 +256,7 @@ ble_gatt_disc_c_test_misc_uuid(uint16_t start_handle, uint16_t end_handle,
     ble_gatt_disc_c_test_misc_verify_chars(ret_chars, 0);
 }
 
-TEST_CASE(ble_gatt_disc_c_test_disc_all)
+TEST_CASE_SELF(ble_gatt_disc_c_test_disc_all)
 {
     /*** One 16-bit characteristic. */
     ble_gatt_disc_c_test_misc_all(50, 100, 0,
@@ -375,9 +375,11 @@ TEST_CASE(ble_gatt_disc_c_test_disc_all)
             .uuid = BLE_UUID16_DECLARE(0x0023),
         }, { 0 }
     });
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_gatt_disc_c_test_disc_uuid)
+TEST_CASE_SELF(ble_gatt_disc_c_test_disc_uuid)
 {
     /*** One 16-bit characteristic. */
     ble_gatt_disc_c_test_misc_uuid(50, 100, 0, BLE_UUID16_DECLARE(0x2010),
@@ -532,9 +534,11 @@ TEST_CASE(ble_gatt_disc_c_test_disc_uuid)
             .uuid = BLE_UUID16_DECLARE(0x2010),
         }, { 0 } }
     );
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_gatt_disc_c_test_oom_all)
+TEST_CASE_SELF(ble_gatt_disc_c_test_oom_all)
 {
     /* Retrieve enough characteristics to require two transactions. */
     struct ble_gatt_disc_c_test_char chrs[] = {
@@ -618,9 +622,11 @@ TEST_CASE(ble_gatt_disc_c_test_oom_all)
                                     BLE_ATT_ERR_ATTR_NOT_FOUND,
                                     1);
     ble_gatt_disc_c_test_misc_verify_chars(chrs, 0);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
-TEST_CASE(ble_gatt_disc_c_test_oom_uuid)
+TEST_CASE_SELF(ble_gatt_disc_c_test_oom_uuid)
 {
     /* Retrieve enough characteristics to require two transactions. */
     struct ble_gatt_disc_c_test_char chrs[] = {
@@ -703,23 +709,14 @@ TEST_CASE(ble_gatt_disc_c_test_oom_uuid)
                                     BLE_ATT_ERR_ATTR_NOT_FOUND,
                                     1);
     ble_gatt_disc_c_test_misc_verify_chars(chrs, 0);
+
+    ble_hs_test_util_assert_mbufs_freed(NULL);
 }
 
 TEST_SUITE(ble_gatt_disc_c_test_suite)
 {
-    tu_suite_set_post_test_cb(ble_hs_test_util_post_test, NULL);
-
     ble_gatt_disc_c_test_disc_all();
     ble_gatt_disc_c_test_disc_uuid();
     ble_gatt_disc_c_test_oom_all();
     ble_gatt_disc_c_test_oom_uuid();
-}
-
-int
-ble_gatt_disc_c_test_all(void)
-{
-    ble_gatt_disc_c_test_suite();
-    ble_gatt_disc_c_test_oom_all();
-
-    return tu_any_failed;
 }
