@@ -135,7 +135,12 @@ ble_ll_rand(void)
         ble_ll_rand_data_get((uint8_t *)xsubi, sizeof(xsubi));
     }
 
-    return (uint32_t) jrand48(xsubi);
+#ifdef __ARMCC_VERSION
+    srand(xsubi);
+    return (uint32_t)rand();
+#else
+   return (uint32_t) jrand48(xsubi);
+#endif
 }
 
 /**
