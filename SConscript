@@ -68,7 +68,6 @@ src += Split('''
     nimble/host/src/ble_uuid.c
     nimble/host/services/ans/src/ble_svc_ans.c
     nimble/host/services/bas/src/ble_svc_bas.c
-    nimble/host/services/bleuart/src/bleuart.c
     nimble/host/services/gap/src/ble_svc_gap.c
     nimble/host/services/gatt/src/ble_svc_gatt.c
     nimble/host/services/ias/src/ble_svc_ias.c
@@ -212,6 +211,7 @@ if GetDepend(['PKG_NIMBLE_SAMPLE_BLEUART']):
 
     src += Split("""
         apps/bleuart/src/bleuart.c
+        nimble/host/services/bleuart/src/bleuart.c
         """)
 
 # btshell
