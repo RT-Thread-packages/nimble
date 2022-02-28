@@ -167,7 +167,7 @@ RT-Thread online packages
 ## 4 注意事项
 - NimBLE 当前处于开发阶段，暂时只支持 Nodic nRF52832 MCU，参见 [nrf52832-bsp](https://github.com/EvalZero/nrf52832-nimble)
 
-## 5、联系方式 & 感谢
+## 5 联系方式 & 感谢
 
 - 维护：RT-Thread 开发团队
 - 主页：https://github.com/RT-Thread-packages/nimble
