@@ -7,11 +7,11 @@
 	<a href="https://github.com/RT-Thread-packages/nimble/issues"><img src="https://img.shields.io/github/issues/RT-Thread-packages/nimble.svg?style=flat-square&logo=GitHub"></a>
 </p>
 
-# 1 介绍
+## 1 介绍
 
 NimBLE 软件包是 RT-Thread 基于 [Apache NimBLE](https://github.com/apache/mynewt-nimble) 开源蓝牙 5.0 协议栈的移植实现，该协议栈提供完整的 Host 层和 Controller 层支持，目前支持 Nordic nRF51 和 nRF52 系列芯片。
 
-## 1.1 主要特性
+### 1.1 主要特性
 
 - 扩展广播(LE Advertising Extensions)
 - 2Mbit/s比特率的物理层
@@ -29,7 +29,7 @@ NimBLE 软件包是 RT-Thread 基于 [Apache NimBLE](https://github.com/apache/m
 - 完整的GATT客户端，服务端，以及子功能
 - 抽象HCI接口层
 
-## 1.2 Profile和Service支持
+### 1.2 Profile和Service支持
 
 - 警报通知服务(ANS)
 - 即时报警服务(IAS)
@@ -40,7 +40,7 @@ NimBLE 软件包是 RT-Thread 基于 [Apache NimBLE](https://github.com/apache/m
 - 自行车速度及步调(CSC)
 - 射频功率(TPS)
 
-## 1.3 Mesh 特性
+### 1.3 Mesh 特性
 
 - 广播和GATT承载(Advertising and GATT bearers)
 - PB-GATT 和 PB-ADV provisioning
@@ -50,7 +50,7 @@ NimBLE 软件包是 RT-Thread 基于 [Apache NimBLE](https://github.com/apache/m
 
 更多关于 NimBLE Stack 的介绍请参考 ``http://mynewt.apache.org/latest/network/docs/index.html``。
 
-## 1.4  目录结构
+### 1.4  目录结构
 
 ```
 NimBLE
@@ -116,11 +116,11 @@ NimBLE
                └───src
 ```
 
-## 1.5 许可证
+### 1.5 许可证
 
 NimBLE 软件包遵循 Apache-2.0 许可，详见 LICENSE 文件。
 
-## 1.6 依赖
+### 1.6 依赖
 
 - RT_Thread 3.0+
 
