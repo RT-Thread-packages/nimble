@@ -6,6 +6,7 @@
 	<a href="https://github.com/RT-Thread-packages/nimble/watchers"><img src="https://img.shields.io/github/watchers/RT-Thread-packages/nimble?style=flat-square&logo=GitHub"></a>
 	<a href="https://github.com/RT-Thread-packages/nimble/issues"><img src="https://img.shields.io/github/issues/RT-Thread-packages/nimble.svg?style=flat-square&logo=GitHub"></a>
 </p>
+
 # 1 介绍
 
 NimBLE 软件包是 RT-Thread 基于 [Apache NimBLE](https://github.com/apache/mynewt-nimble) 开源蓝牙 5.0 协议栈的移植实现，该协议栈提供完整的 Host 层和 Controller 层支持，目前支持 Nordic nRF51 和 nRF52 系列芯片。
