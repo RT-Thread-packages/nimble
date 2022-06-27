@@ -63,6 +63,8 @@
 #define MYNEWT_VAL_BLE_HOST_THREAD_PRIORITY      (PKG_NIMBLE_HOST_THREAD_PRIORITY)
 #endif
 
+#define MYNEWT_VAL_BLE_HS_AUTO_START 1
+
 /**
  * Mesh Configuration
  */ 

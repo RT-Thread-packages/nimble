@@ -23,17 +23,14 @@
 #include "sysinit/sysinit.h"
 #include "syscfg/syscfg.h"
 #include "stats/stats.h"
-#include "nimble/ble_hci_trans.h"
+#include "host/ble_hs.h"
 #include "ble_hs_priv.h"
-#include "ble_monitor_priv.h"
 #include "nimble/nimble_npl.h"
 #ifndef MYNEWT
 #include "nimble/nimble_port.h"
 #endif
 
-#define BLE_HS_HCI_EVT_COUNT                    \
-    (MYNEWT_VAL(BLE_HCI_EVT_HI_BUF_COUNT) +     \
-     MYNEWT_VAL(BLE_HCI_EVT_LO_BUF_COUNT))
+#define BLE_HS_HCI_EVT_COUNT    MYNEWT_VAL(BLE_TRANSPORT_EVT_COUNT)
 
 static void ble_hs_event_rx_hci_ev(struct ble_npl_event *ev);
 #if NIMBLE_BLE_CONNECT
@@ -222,10 +219,6 @@ ble_hs_process_rx_data_queue(void)
     struct os_mbuf *om;
 
     while ((om = ble_mqueue_get(&ble_hs_rx_q)) != NULL) {
-#if BLE_MONITOR
-        ble_monitor_send_om(BLE_MONITOR_OPCODE_ACL_RX_PKT, om);
-#endif
-
         ble_hs_hci_evt_acl_process(om);
     }
 }
@@ -369,12 +362,6 @@ ble_hs_reset(void)
 
     ble_hs_sync_state = 0;
 
-    /* Reset transport.  Assume success; there is nothing we can do in case of
-     * failure.  If the transport failed to reset, the host will reset itself
-     * again when it fails to sync with the controller.
-     */
-    (void)ble_hci_trans_reset();
-
     ble_hs_clear_rx_queue();
 
     /* Clear adverising and scanning states. */
@@ -498,18 +485,13 @@ ble_hs_sched_start(void)
 static void
 ble_hs_event_rx_hci_ev(struct ble_npl_event *ev)
 {
-    const struct ble_hci_ev *hci_ev;
+    struct ble_hci_ev *hci_ev;
     int rc;
 
     hci_ev = ble_npl_event_get_arg(ev);
 
     rc = os_memblock_put(&ble_hs_hci_ev_pool, ev);
     BLE_HS_DBG_ASSERT_EVAL(rc == 0);
-
-#if BLE_MONITOR
-    ble_monitor_send(BLE_MONITOR_OPCODE_EVENT_PKT, hci_ev,
-                     hci_ev->length + sizeof(*hci_ev));
-#endif
 
     ble_hs_hci_evt_process(hci_ev);
 }
@@ -572,7 +554,7 @@ ble_hs_enqueue_hci_event(uint8_t *hci_evt)
 
     ev = os_memblock_get(&ble_hs_hci_ev_pool);
     if (ev == NULL) {
-        ble_hci_trans_buf_free(hci_evt);
+        ble_transport_free(hci_evt);
     } else {
         ble_npl_event_init(ev, ble_hs_event_rx_hci_ev, hci_evt);
         ble_npl_eventq_put(ble_hs_evq, ev);
@@ -704,11 +686,7 @@ ble_hs_rx_data(struct os_mbuf *om, void *arg)
 int
 ble_hs_tx_data(struct os_mbuf *om)
 {
-#if BLE_MONITOR
-    ble_monitor_send_om(BLE_MONITOR_OPCODE_ACL_TX_PKT, om);
-#endif
-
-    return ble_hci_trans_hs_acl_tx(om);
+    return ble_transport_to_ll_acl(om);
 }
 
 void
@@ -792,14 +770,6 @@ ble_hs_init(void)
     ble_hs_evq_set(nimble_port_get_dflt_eventq());
 #endif
 
-    /* Configure the HCI transport to communicate with a host. */
-    ble_hci_trans_cfg_hs(ble_hs_hci_rx_evt, NULL, ble_hs_rx_data, NULL);
-
-#if BLE_MONITOR
-    rc = ble_monitor_init();
-    SYSINIT_PANIC_ASSERT(rc == 0);
-#endif
-
     /* Enqueue the start event to the default event queue.  Using the default
      * queue ensures the event won't run until the end of main().  This allows
      * the application to configure this package in the meantime.
@@ -812,8 +782,24 @@ ble_hs_init(void)
     ble_npl_eventq_put(nimble_port_get_dflt_eventq(), &ble_hs_ev_start_stage1);
 #endif
 #endif
+}
 
-#if BLE_MONITOR
-    ble_monitor_new_index(0, (uint8_t[6]){ }, "nimble0");
-#endif
+/* Transport APIs for HS side */
+
+int
+ble_transport_to_hs_evt_impl(void *buf)
+{
+    return ble_hs_hci_rx_evt(buf, NULL);
+}
+
+int
+ble_transport_to_hs_acl_impl(struct os_mbuf *om)
+{
+    return ble_hs_rx_data(om, NULL);
+}
+
+void
+ble_transport_hs_init(void)
+{
+    ble_hs_init();
 }

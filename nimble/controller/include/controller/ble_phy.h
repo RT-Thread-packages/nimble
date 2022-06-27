@@ -83,9 +83,6 @@ typedef void (*ble_phy_tx_end_func)(void *arg);
 /* Initialize the PHY */
 int ble_phy_init(void);
 
-/* Reset the PHY */
-int ble_phy_reset(void);
-
 /* Set the PHY channel */
 int ble_phy_setchan(uint8_t chan, uint32_t access_addr, uint32_t crcinit);
 
@@ -164,7 +161,7 @@ uint32_t ble_phy_access_addr_get(void);
 
 /* Enable encryption */
 void ble_phy_encrypt_enable(uint64_t pkt_counter, uint8_t *iv, uint8_t *key,
-                            uint8_t is_master);
+                            uint8_t is_central);
 
 /* Disable encryption */
 void ble_phy_encrypt_disable(void);

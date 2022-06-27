@@ -19,7 +19,7 @@
 
 #include <syscfg/syscfg.h>
 
-#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_EXT_ADV)
+#if MYNEWT_VAL(BLE_LL_ROLE_OBSERVER) && MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_EXT_ADV)
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -28,7 +28,6 @@
 #include "os/os.h"
 #include "nimble/ble.h"
 #include "nimble/hci_common.h"
-#include "nimble/ble_hci_trans.h"
 #include "controller/ble_phy.h"
 #include "controller/ble_hw.h"
 #include "controller/ble_ll.h"
@@ -230,7 +229,7 @@ ble_ll_hci_ev_alloc_ext_adv_report_for_aux(struct ble_ll_scan_addr_data *addrd,
     struct ext_adv_report *report;
     struct ble_hci_ev *hci_ev;
 
-    hci_ev = (void *)ble_hci_trans_buf_alloc(BLE_HCI_TRANS_BUF_EVT_LO);
+    hci_ev = ble_transport_alloc_evt(1);
     if (!hci_ev) {
         return NULL;
     }
@@ -286,7 +285,7 @@ ble_ll_hci_ev_dup_ext_adv_report(struct ble_hci_ev *hci_ev_src)
     struct ext_adv_report *report;
     struct ble_hci_ev *hci_ev;
 
-    hci_ev = (void *)ble_hci_trans_buf_alloc(BLE_HCI_TRANS_BUF_EVT_LO);
+    hci_ev = ble_transport_alloc_evt(1);
     if (!hci_ev) {
         return NULL;
     }
@@ -577,6 +576,7 @@ ble_ll_hci_ev_send_ext_adv_report(struct os_mbuf *rxpdu,
         ble_ll_hci_event_send(*hci_ev);
 
         *hci_ev = hci_ev_next;
+        hci_ev_next = NULL;
     } while ((offset < data_len) && *hci_ev);
 
     return truncated ? -1 : 0;
@@ -638,7 +638,7 @@ ble_ll_hci_ev_send_ext_adv_report_for_ext(struct os_mbuf *rxpdu,
         return;
     }
 
-    hci_ev = (void *)ble_hci_trans_buf_alloc(BLE_HCI_TRANS_BUF_EVT_LO);
+    hci_ev = ble_transport_alloc_evt(1);
     if (!hci_ev) {
         return;
     }
@@ -670,9 +670,11 @@ ble_ll_scan_aux_break_ev(struct ble_npl_event *ev)
 void
 ble_ll_scan_aux_break(struct ble_ll_scan_aux_data *aux)
 {
+#if MYNEWT_VAL(BLE_LL_ROLE_CENTRAL)
     if (aux->flags & BLE_LL_SCAN_AUX_F_W4_CONNECT_RSP) {
         ble_ll_conn_send_connect_req_cancel();
     }
+#endif
 
     ble_npl_event_init(&aux->break_ev, ble_ll_scan_aux_break_ev, aux);
     ble_ll_event_send(&aux->break_ev);
@@ -764,6 +766,7 @@ ble_ll_scan_aux_rx_isr_start(uint8_t pdu_type, struct ble_mbuf_hdr *rxhdr)
         if (pdu_type != BLE_ADV_PDU_TYPE_AUX_CONNECT_RSP) {
             aux_data_current = NULL;
             ble_ll_scan_aux_break(aux);
+            ble_ll_state_set(BLE_LL_STATE_STANDBY);
             return -1;
         }
         return 0;
@@ -772,6 +775,7 @@ ble_ll_scan_aux_rx_isr_start(uint8_t pdu_type, struct ble_mbuf_hdr *rxhdr)
     if (pdu_type != BLE_ADV_PDU_TYPE_ADV_EXT_IND) {
         aux_data_current = NULL;
         ble_ll_scan_aux_break(aux);
+        ble_ll_state_set(BLE_LL_STATE_STANDBY);
         return -1;
     }
 
@@ -1067,9 +1071,11 @@ ble_ll_scan_aux_rx_isr_end_on_ext(struct ble_ll_scan_sm *scansm,
         aux->adi = adi;
         aux->flags |= BLE_LL_SCAN_AUX_F_HAS_ADI;
 
+#if MYNEWT_VAL(BLE_LL_ROLE_CENTRAL)
         if (aux->scan_type == BLE_SCAN_TYPE_INITIATE) {
             aux->flags |= BLE_LL_SCAN_AUX_F_CONNECTABLE;
         }
+#endif
 
         if (do_match) {
             aux->flags |= BLE_LL_SCAN_AUX_F_MATCHED;
@@ -1302,13 +1308,16 @@ ble_ll_scan_aux_rx_isr_end(struct os_mbuf *rxpdu, uint8_t crcok)
         goto done;
     }
 
+#if MYNEWT_VAL(BLE_LL_ROLE_CENTRAL)
     if ((aux->scan_type == BLE_SCAN_TYPE_INITIATE) &&
         !(scan_filt_policy & 0x01)) {
         rc = ble_ll_scan_rx_check_init(&addrd);
         if (rc < 0) {
+            rxinfo->flags |= BLE_MBUF_HDR_F_IGNORED;
             goto done;
         }
     }
+#endif
 
     aux->flags |= BLE_LL_SCAN_AUX_F_MATCHED;
 
@@ -1327,6 +1336,7 @@ ble_ll_scan_aux_rx_isr_end(struct os_mbuf *rxpdu, uint8_t crcok)
             return 0;
         }
         break;
+#if MYNEWT_VAL(BLE_LL_ROLE_CENTRAL)
     case BLE_SCAN_TYPE_INITIATE:
         if (ble_ll_conn_send_connect_req(rxpdu, &addrd, 1) == 0) {
             /* AUX_CONNECT_REQ sent, keep PHY enabled to continue */
@@ -1337,6 +1347,9 @@ ble_ll_scan_aux_rx_isr_end(struct os_mbuf *rxpdu, uint8_t crcok)
         } else {
             rxinfo->flags |= BLE_MBUF_HDR_F_IGNORED;
         }
+        break;
+#endif
+    default:
         break;
     }
 
@@ -1453,7 +1466,7 @@ ble_ll_scan_aux_sync_check(struct os_mbuf *rxpdu,
 }
 #endif
 
-
+#if MYNEWT_VAL(BLE_LL_ROLE_CENTRAL)
 static int
 ble_ll_scan_aux_check_connect_rsp(uint8_t *rxbuf,
                                   struct ble_ll_scan_pdu_data *pdu_data,
@@ -1504,23 +1517,22 @@ ble_ll_scan_aux_check_connect_rsp(uint8_t *rxbuf,
     targeta_type = !!(pdu_hdr & BLE_ADV_PDU_HDR_RXADD_RAND);
 
 #if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_PRIVACY)
-    /* If AdvA was initially resolved, we need to check if current AdvA also
-     * resolved with the same IRK since it may have changes due to RPA timeout.
-     * Otherwise it shall be the same as in AUX_CONNECT_REQ.
+    /* If we have IRK for peer and AdvA is an RPA, we need to check if current
+     * RPA resolves using that IRK. This is to verify AdvA in case RPS changed
+     * due to timeout or AdvA in advertising was an identity address but is an
+     * RPA in AUX_CONNECT_RSP.
+     * Otherwise, it shall be the same as in AUX_CONNECT_REQ.
      */
-    if (addrd->adva_resolved) {
-        if (!adva_type) {
-            return -1;
-        }
-
-        BLE_LL_ASSERT(addrd->rpa_index >= 0);
+    if ((addrd->rpa_index >= 0) && ble_ll_is_rpa(adva, adva_type)) {
         rl = &g_ble_ll_resolv_list[addrd->rpa_index];
 
         if (!ble_ll_resolv_rpa(adva, rl->rl_peer_irk)) {
             return -1;
         }
 
+        addrd->adva_resolved = 1;
         addrd->adva = adva;
+        addrd->adva_type = adva_type;
     } else if ((adva_type !=
                 !!(pdu_data->hdr_byte & BLE_ADV_PDU_HDR_RXADD_MASK)) ||
                (memcmp(adva, pdu_data->adva, 6) != 0)) {
@@ -1533,7 +1545,7 @@ ble_ll_scan_aux_check_connect_rsp(uint8_t *rxbuf,
     }
 #endif /* BLE_LL_CFG_FEAT_LL_PRIVACY */
 
-    if ((targeta_type != !!(pdu_data->hdr_byte & BLE_ADV_PDU_HDR_RXADD_MASK)) ||
+    if ((targeta_type != !!(pdu_data->hdr_byte & BLE_ADV_PDU_HDR_TXADD_MASK)) ||
         (memcmp(targeta, pdu_data->inita, 6) != 0)) {
         return -1;
     }
@@ -1553,8 +1565,9 @@ ble_ll_scan_aux_rx_pkt_in_for_initiator(struct os_mbuf *rxpdu,
     aux = rxinfo->user_data;
 
     if (rxinfo->flags & BLE_MBUF_HDR_F_IGNORED) {
+        ble_ll_scan_aux_free(aux);
         ble_ll_scan_chk_resume();
-        goto done;
+        return;
     }
 
     if (!(rxinfo->flags & BLE_MBUF_HDR_F_CONNECT_RSP_RXD)) {
@@ -1568,21 +1581,17 @@ ble_ll_scan_aux_rx_pkt_in_for_initiator(struct os_mbuf *rxpdu,
     if (ble_ll_scan_aux_check_connect_rsp(rxpdu->om_data,
                                           ble_ll_scan_get_pdu_data(),
                                           &addrd) < 0) {
+        ble_ll_conn_send_connect_req_cancel();
+        ble_ll_scan_aux_free(aux);
         ble_ll_scan_chk_resume();
-        goto done;
+        return;
     }
-
-    aux->flags &= ~BLE_LL_SCAN_AUX_F_W4_CONNECT_RSP;
 
     ble_ll_scan_sm_stop(0);
     ble_ll_conn_created_on_aux(rxpdu, &addrd, aux->targeta);
-
-done:
-    if (aux->flags & BLE_LL_SCAN_AUX_F_W4_CONNECT_RSP) {
-        ble_ll_conn_send_connect_req_cancel();
-    }
     ble_ll_scan_aux_free(aux);
 }
+#endif
 
 void
 ble_ll_scan_aux_rx_pkt_in(struct os_mbuf *rxpdu, struct ble_mbuf_hdr *rxhdr)
@@ -1601,10 +1610,12 @@ ble_ll_scan_aux_rx_pkt_in(struct os_mbuf *rxpdu, struct ble_mbuf_hdr *rxhdr)
 
     BLE_LL_ASSERT(aux);
 
+#if MYNEWT_VAL(BLE_LL_ROLE_CENTRAL)
     if (aux->scan_type == BLE_SCAN_TYPE_INITIATE) {
         ble_ll_scan_aux_rx_pkt_in_for_initiator(rxpdu, rxhdr);
         return;
     }
+#endif
 
 #if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_PERIODIC_ADV)
     sync_check = ble_ll_sync_enabled() &&
@@ -1649,6 +1660,13 @@ ble_ll_scan_aux_rx_pkt_in(struct os_mbuf *rxpdu, struct ble_mbuf_hdr *rxhdr)
 #if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_PERIODIC_ADV)
     if (sync_check) {
         ble_ll_scan_aux_sync_check(rxpdu, &addrd);
+    }
+#endif
+
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_PRIVACY)
+    if (addrd.adva_resolved) {
+        BLE_LL_ASSERT(addrd.rpa_index >= 0);
+        ble_ll_resolv_set_peer_rpa(addrd.rpa_index, addrd.adva);
     }
 #endif
 

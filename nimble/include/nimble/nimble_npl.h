@@ -30,7 +30,6 @@ extern "C" {
 
 struct ble_npl_event;
 typedef void ble_npl_event_fn(struct ble_npl_event *ev);
-typedef void ble_npl_task_fn(void *parameter);
 
 enum ble_npl_error {
     BLE_NPL_OK = 0,

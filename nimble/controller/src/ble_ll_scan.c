@@ -23,10 +23,8 @@
 #include <assert.h>
 #include "syscfg/syscfg.h"
 #include "os/os.h"
-#include "os/os_cputime.h"
 #include "nimble/ble.h"
 #include "nimble/hci_common.h"
-#include "nimble/ble_hci_trans.h"
 #include "controller/ble_phy.h"
 #include "controller/ble_hw.h"
 #include "controller/ble_ll.h"
@@ -35,6 +33,7 @@
 #if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_EXT_ADV)
 #include "controller/ble_ll_scan_aux.h"
 #endif
+#include "controller/ble_ll_tmr.h"
 #include "controller/ble_ll_hci.h"
 #include "controller/ble_ll_whitelist.h"
 #include "controller/ble_ll_resolv.h"
@@ -42,6 +41,8 @@
 #include "controller/ble_ll_trace.h"
 #include "controller/ble_ll_sync.h"
 #include "ble_ll_conn_priv.h"
+
+#if MYNEWT_VAL(BLE_LL_ROLE_OBSERVER)
 
 /*
  * XXX:
@@ -136,7 +137,7 @@ ble_ll_scan_start(struct ble_ll_scan_sm *scansm);
 static inline uint32_t
 ble_ll_scan_time_hci_to_ticks(uint16_t value)
 {
-    return os_cputime_usecs_to_ticks(value * BLE_HCI_SCAN_ITVL);
+    return ble_ll_tmr_u2t(value * BLE_HCI_SCAN_ITVL);
 }
 
 /* See Vol 6 Part B Section 4.4.3.2. Active scanning backoff */
@@ -180,7 +181,7 @@ ble_ll_scan_refresh_nrpa(struct ble_ll_scan_sm *scansm)
     ble_npl_time_t now;
 
     now = ble_npl_time_get();
-    if (CPUTIME_GEQ(now, scansm->scan_nrpa_timer)) {
+    if (LL_TMR_GEQ(now, scansm->scan_nrpa_timer)) {
         /* Generate new NRPA */
         ble_ll_rand_data_get(scansm->scan_nrpa, BLE_DEV_ADDR_LEN);
         scansm->scan_nrpa[5] &= ~0xc0;
@@ -325,7 +326,7 @@ ble_ll_scan_get_ext_adv_report(struct ext_adv_report *copy_from)
     struct ext_adv_report *report;
     struct ble_hci_ev *hci_ev;
 
-    hci_ev = ( void *) ble_hci_trans_buf_alloc(BLE_HCI_TRANS_BUF_EVT_LO);
+    hci_ev = ble_transport_alloc_evt(1);
     if (!hci_ev) {
         return NULL;
     }
@@ -510,7 +511,7 @@ ble_ll_hci_send_legacy_ext_adv_report(uint8_t evtype,
         break;
     default:
         BLE_LL_ASSERT(0);
-        ble_hci_trans_buf_free((uint8_t *) hci_ev);
+        ble_transport_free(hci_ev);
         return -1;
     }
 
@@ -555,7 +556,7 @@ ble_ll_hci_send_adv_report(uint8_t evtype,
         return -1;
     }
 
-    hci_ev = (void *) ble_hci_trans_buf_alloc(BLE_HCI_TRANS_BUF_EVT_LO);
+    hci_ev = ble_transport_alloc_evt(1);
     if (!hci_ev) {
         return -1;
     }
@@ -592,7 +593,7 @@ ble_ll_hci_send_dir_adv_report(const uint8_t *addr, uint8_t addr_type,
         return -1;
     }
 
-    hci_ev = (void *) ble_hci_trans_buf_alloc(BLE_HCI_TRANS_BUF_EVT_LO);
+    hci_ev = ble_transport_alloc_evt(1);
     if (!hci_ev) {
         return -1;
     }
@@ -779,7 +780,7 @@ ble_ll_scan_start(struct ble_ll_scan_sm *scansm)
     ble_phy_mode_set(phy_mode, phy_mode);
 #endif
 
-    rc = ble_phy_rx_set_start_time(os_cputime_get32() +
+    rc = ble_phy_rx_set_start_time(ble_ll_tmr_get() +
                                    g_ble_ll_sched_offset_ticks, 0);
     if (!rc || rc == BLE_PHY_ERR_RX_LATE) {
         /* If we are late here, it is still OK because we keep scanning.
@@ -822,7 +823,7 @@ ble_ll_scan_move_window_to(struct ble_ll_scan_phy *scanp, uint32_t time)
      */
 
     end_time = scanp->timing.start_time + scanp->timing.window;
-    while (CPUTIME_GEQ(time, end_time)) {
+    while (LL_TMR_GEQ(time, end_time)) {
         scanp->timing.start_time += scanp->timing.interval;
         scanp->scan_chan = ble_ll_scan_get_next_adv_prim_chan(scanp->scan_chan);
         end_time = scanp->timing.start_time + scanp->timing.window;
@@ -844,8 +845,8 @@ ble_ll_scan_is_inside_window(struct ble_ll_scan_phy *scanp, uint32_t time)
         return true;
     }
 
-    return CPUTIME_GEQ(time, start_time) &&
-           CPUTIME_LT(time, start_time + scanp->timing.window);
+    return LL_TMR_GEQ(time, start_time) &&
+           LL_TMR_LT(time, start_time + scanp->timing.window);
 }
 
 /**
@@ -860,7 +861,7 @@ ble_ll_scan_sm_stop(int chk_disable)
 
     /* Stop the scanning timer  */
     scansm = &g_ble_ll_scan_sm;
-    os_cputime_timer_stop(&scansm->scan_timer);
+    ble_ll_tmr_stop(&scansm->scan_timer);
 
     /* Only set state if we are currently in a scan window */
     if (chk_disable) {
@@ -879,7 +880,9 @@ ble_ll_scan_sm_stop(int chk_disable)
 
     OS_ENTER_CRITICAL(sr);
 
+#if MYNEWT_VAL(BLE_LL_ROLE_CENTRAL)
     scansm->connsm = NULL;
+#endif
 
     /* Disable scanning state machine */
     scansm->scan_enabled = 0;
@@ -961,7 +964,7 @@ ble_ll_scan_sm_start(struct ble_ll_scan_sm *scansm)
     }
 
     /* Start scan at 1st window */
-    os_cputime_timer_start(&scansm->scan_timer, scanp->timing.start_time);
+    ble_ll_tmr_start(&scansm->scan_timer, scanp->timing.start_time);
 
     return BLE_ERR_SUCCESS;
 }
@@ -1021,7 +1024,7 @@ ble_ll_scan_event_proc(struct ble_npl_event *ev)
 
     OS_ENTER_CRITICAL(sr);
     if (!scansm->scan_enabled) {
-        os_cputime_timer_stop(&scansm->scan_timer);
+        ble_ll_tmr_stop(&scansm->scan_timer);
         ble_ll_rfmgmt_scan_changed(false, 0);
         ble_ll_rfmgmt_release();
         OS_EXIT_CRITICAL(sr);
@@ -1036,7 +1039,7 @@ ble_ll_scan_event_proc(struct ble_npl_event *ev)
         return;
     }
 
-    now = os_cputime_get32();
+    now = ble_ll_tmr_get();
 
     inside_window = ble_ll_scan_is_inside_window(scanp, now);
 
@@ -1050,8 +1053,8 @@ ble_ll_scan_event_proc(struct ble_npl_event *ev)
          * inside window or has next window earlier than current PHY.
          */
         if (!inside_window &&
-            ((inside_window_next || CPUTIME_LEQ(scanp_next->timing.start_time,
-                                                scanp->timing.start_time)))) {
+            ((inside_window_next || LL_TMR_LEQ(scanp_next->timing.start_time,
+                                               scanp->timing.start_time)))) {
             scansm->scanp = scanp_next;
             scansm->scanp_next = scanp;
             scanp = scansm->scanp;
@@ -1087,12 +1090,26 @@ ble_ll_scan_event_proc(struct ble_npl_event *ev)
      */
     start_scan = inside_window;
     switch (ble_ll_state_get()) {
+#if MYNEWT_VAL(BLE_LL_ROLE_BROADCASTER)
     case BLE_LL_STATE_ADV:
+        start_scan = false;
+        break;
+#endif
+#if MYNEWT_VAL(BLE_LL_ROLE_PERIPHERAL) || MYNEWT_VAL(BLE_LL_ROLE_CENTRAL)
     case BLE_LL_STATE_CONNECTION:
+        start_scan = false;
+        break;
+#endif
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_PERIODIC_ADV)
     case BLE_LL_STATE_SYNC:
+        start_scan = false;
+        break;
+#endif
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_EXT_ADV)
     case BLE_LL_STATE_SCAN_AUX:
-         start_scan = false;
-         break;
+        start_scan = false;
+        break;
+#endif
     case BLE_LL_STATE_SCANNING:
         /* Must disable PHY since we will move to a new channel */
         ble_phy_disable();
@@ -1114,7 +1131,7 @@ ble_ll_scan_event_proc(struct ble_npl_event *ev)
     }
 
     OS_EXIT_CRITICAL(sr);
-    os_cputime_timer_start(&scansm->scan_timer, next_proc_time);
+    ble_ll_tmr_start(&scansm->scan_timer, next_proc_time);
 }
 
 /**
@@ -1184,6 +1201,7 @@ ble_ll_scan_rx_isr_start(uint8_t pdu_type, uint16_t *rxflags)
         }
         break;
 #endif
+#if MYNEWT_VAL(BLE_LL_ROLE_CENTRAL)
     case BLE_SCAN_TYPE_INITIATE:
         if ((pdu_type == BLE_ADV_PDU_TYPE_ADV_IND) ||
             (pdu_type == BLE_ADV_PDU_TYPE_ADV_DIRECT_IND)) {
@@ -1197,6 +1215,7 @@ ble_ll_scan_rx_isr_start(uint8_t pdu_type, uint16_t *rxflags)
         }
 #endif
         break;
+#endif
     default:
         break;
     }
@@ -1342,6 +1361,7 @@ ble_ll_scan_rx_filter(uint8_t own_addr_type, uint8_t scan_filt_policy,
     return 0;
 }
 
+#if MYNEWT_VAL(BLE_LL_ROLE_CENTRAL)
 int
 ble_ll_scan_rx_check_init(struct ble_ll_scan_addr_data *addrd)
 {
@@ -1364,6 +1384,7 @@ ble_ll_scan_rx_check_init(struct ble_ll_scan_addr_data *addrd)
 
     return 0;
 }
+#endif
 
 static int
 ble_ll_scan_rx_isr_end_on_adv(uint8_t pdu_type, uint8_t *rxbuf,
@@ -1388,6 +1409,7 @@ ble_ll_scan_rx_isr_end_on_adv(uint8_t pdu_type, uint8_t *rxbuf,
         return 0;
     }
 
+#if MYNEWT_VAL(BLE_LL_ROLE_CENTRAL)
     if ((scanp->scan_type == BLE_SCAN_TYPE_INITIATE) &&
         !(scansm->scan_filt_policy & 0x01)) {
         rc = ble_ll_scan_rx_check_init(addrd);
@@ -1395,6 +1417,7 @@ ble_ll_scan_rx_isr_end_on_adv(uint8_t pdu_type, uint8_t *rxbuf,
             return 0;
         }
     }
+#endif
 
     rxinfo->flags |= BLE_MBUF_HDR_F_DEVMATCH;
 #if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_PRIVACY)
@@ -1415,10 +1438,19 @@ ble_ll_scan_rx_isr_end_on_adv(uint8_t pdu_type, uint8_t *rxbuf,
     /* Allow responding to all PDUs when initiating since unwanted PDUs were
      * already filtered out in isr_start.
      */
-    return ((scanp->scan_type == BLE_SCAN_TYPE_ACTIVE) &&
-           ((pdu_type == BLE_ADV_PDU_TYPE_ADV_IND) ||
-            (pdu_type == BLE_ADV_PDU_TYPE_ADV_SCAN_IND))) ||
-            (scanp->scan_type == BLE_SCAN_TYPE_INITIATE);
+    if ((scanp->scan_type == BLE_SCAN_TYPE_ACTIVE) &&
+            ((pdu_type == BLE_ADV_PDU_TYPE_ADV_IND) ||
+             (pdu_type == BLE_ADV_PDU_TYPE_ADV_SCAN_IND))) {
+        return 1;
+    }
+
+#if MYNEWT_VAL(BLE_LL_ROLE_CENTRAL)
+    if (scanp->scan_type == BLE_SCAN_TYPE_INITIATE) {
+        return 1;
+    }
+#endif
+
+    return 0;
 }
 
 static int
@@ -1599,12 +1631,14 @@ ble_ll_scan_rx_isr_end(struct os_mbuf *rxpdu, uint8_t crcok)
                 return 0;
             }
             break;
+#if MYNEWT_VAL(BLE_LL_ROLE_CENTRAL)
         case BLE_SCAN_TYPE_INITIATE:
             if (ble_ll_conn_send_connect_req(rxpdu, &addrd, 0) == 0) {
                 hdr->rxinfo.flags |= BLE_MBUF_HDR_F_CONNECT_IND_TXD;
                 return 0;
             }
             break;
+#endif
         }
     }
 
@@ -1646,7 +1680,7 @@ ble_ll_scan_chk_resume(void)
             return;
         }
 
-        now = os_cputime_get32();
+        now = ble_ll_tmr_get();
         if (ble_ll_state_get() == BLE_LL_STATE_STANDBY &&
             ble_ll_scan_is_inside_window(scansm->scanp, now)) {
             /* Turn on the receiver and set state */
@@ -1896,6 +1930,13 @@ ble_ll_scan_rx_pkt_in_on_legacy(uint8_t pdu_type, struct os_mbuf *om,
     ble_ll_scan_get_addr_data_from_legacy(pdu_type, rxbuf, addrd);
     ble_ll_scan_rx_pkt_in_restore_addr_data(hdr, addrd);
 
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_PRIVACY)
+    if (addrd->adva_resolved) {
+        BLE_LL_ASSERT(addrd->rpa_index >= 0);
+        ble_ll_resolv_set_peer_rpa(addrd->rpa_index, addrd->adva);
+    }
+#endif
+
     send_hci_report = !scansm->scan_filt_dups ||
                       !ble_ll_scan_dup_check_legacy(addrd->adv_addr_type,
                                                     addrd->adv_addr,
@@ -1924,10 +1965,28 @@ ble_ll_scan_rx_pkt_in_on_legacy(uint8_t pdu_type, struct os_mbuf *om,
 void
 ble_ll_scan_rx_pkt_in(uint8_t ptype, struct os_mbuf *om, struct ble_mbuf_hdr *hdr)
 {
+#if MYNEWT_VAL(BLE_LL_ROLE_CENTRAL)
     struct ble_mbuf_hdr_rxinfo *rxinfo;
+    uint8_t *targeta;
+#endif
     struct ble_ll_scan_sm *scansm;
     struct ble_ll_scan_addr_data addrd;
-    uint8_t *targeta;
+    uint8_t max_pdu_type;
+
+    scansm = &g_ble_ll_scan_sm;
+
+    /* Ignore PDUs we do not expect here */
+    max_pdu_type = BLE_ADV_PDU_TYPE_ADV_SCAN_IND;
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_EXT_ADV)
+    if (scansm->ext_scanning) {
+        /* Note: We do not expect AUX_CONNECT_RSP here */
+        max_pdu_type = BLE_ADV_PDU_TYPE_ADV_EXT_IND;
+    }
+#endif
+    if (ptype > max_pdu_type) {
+        ble_ll_scan_chk_resume();
+        return;
+    }
 
 #if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_EXT_ADV)
     if (ptype == BLE_ADV_PDU_TYPE_ADV_EXT_IND) {
@@ -1937,10 +1996,10 @@ ble_ll_scan_rx_pkt_in(uint8_t ptype, struct os_mbuf *om, struct ble_mbuf_hdr *hd
     }
 #endif
 
-    scansm = &g_ble_ll_scan_sm;
-    rxinfo = &hdr->rxinfo;
-
-    if (scansm->scanp->scan_type == BLE_SCAN_TYPE_INITIATE) {
+    switch (scansm->scanp->scan_type) {
+#if MYNEWT_VAL(BLE_LL_ROLE_CENTRAL)
+    case BLE_SCAN_TYPE_INITIATE:
+        rxinfo = &hdr->rxinfo;
         if (rxinfo->flags & BLE_MBUF_HDR_F_CONNECT_IND_TXD) {
             /* We need to keep original TargetA in case it was resolved, so rl
              * can be updated properly.
@@ -1953,8 +2012,11 @@ ble_ll_scan_rx_pkt_in(uint8_t ptype, struct os_mbuf *om, struct ble_mbuf_hdr *hd
             ble_ll_conn_created_on_legacy(om, &addrd, targeta);
             return;
         }
-    } else {
+        break;
+#endif
+    default:
         ble_ll_scan_rx_pkt_in_on_legacy(ptype, om, hdr, &addrd);
+        break;
     }
 
     ble_ll_scan_chk_resume();
@@ -2056,7 +2118,9 @@ ble_ll_scan_hci_set_ext_params(const uint8_t *cmdbuf, uint8_t len)
 
     struct ble_ll_scan_phy new_params[BLE_LL_SCAN_PHY_NUMBER] = { };
     struct ble_ll_scan_phy *uncoded = &new_params[PHY_UNCODED];
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_CODED_PHY)
     struct ble_ll_scan_phy *coded = &new_params[PHY_CODED];
+#endif
     uint16_t interval;
     uint16_t window;
     int rc;
@@ -2134,7 +2198,6 @@ ble_ll_scan_hci_set_ext_params(const uint8_t *cmdbuf, uint8_t len)
         /* That means user wants to use this PHY for scanning */
         coded->configured = 1;
     }
-#endif
 
     /* if any of PHYs is configured for continuous scan we alter interval to
      * fit other PHY
@@ -2148,6 +2211,7 @@ ble_ll_scan_hci_set_ext_params(const uint8_t *cmdbuf, uint8_t len)
             uncoded->timing.interval += coded->timing.window;
         }
     }
+#endif
 
     g_ble_ll_scan_params.own_addr_type = cmd->own_addr_type;
     g_ble_ll_scan_params.scan_filt_policy = cmd->filter_policy;
@@ -2274,6 +2338,7 @@ ble_ll_scan_set_enable(uint8_t enable, uint8_t filter_dups, uint16_t period,
     /* if already enable we just need to update parameters */
     if (scansm->scan_enabled) {
         /* Controller does not allow initiating and scanning.*/
+#if MYNEWT_VAL(BLE_LL_ROLE_CENTRAL)
         for (i = 0; i < BLE_LL_SCAN_PHY_NUMBER; i++) {
             scanp_phy = &scansm->scan_phys[i];
             if (scanp_phy->configured &&
@@ -2281,6 +2346,7 @@ ble_ll_scan_set_enable(uint8_t enable, uint8_t filter_dups, uint16_t period,
                 return BLE_ERR_CMD_DISALLOWED;
             }
         }
+#endif
 
 #if MYNEWT_VAL(BLE_LL_NUM_SCAN_DUP_ADVS)
         /* update filter policy */
@@ -2410,13 +2476,14 @@ ble_ll_scan_can_chg_whitelist(void)
     return rc;
 }
 
+#if MYNEWT_VAL(BLE_LL_ROLE_CENTRAL)
 int
 ble_ll_scan_initiator_start(struct ble_ll_conn_sm *connsm, uint8_t ext,
                             struct ble_ll_conn_create_scan *cc_scan)
 {
     struct ble_ll_scan_sm *scansm;
     struct ble_ll_scan_phy *scanp_uncoded;
-#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_CODED_PHY)
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_EXT_ADV) && MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_CODED_PHY)
     struct ble_ll_scan_phy *scanp_coded;
 #endif
     uint8_t init_phy_mask;
@@ -2448,7 +2515,7 @@ ble_ll_scan_initiator_start(struct ble_ll_conn_sm *connsm, uint8_t ext,
         scanp_uncoded->configured = 0;
     }
 
-#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_CODED_PHY)
+#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_EXT_ADV) && MYNEWT_VAL(BLE_LL_CFG_FEAT_LE_CODED_PHY)
     scanp_coded = &scansm->scan_phys[PHY_CODED];
     if (init_phy_mask & BLE_PHY_MASK_CODED) {
         scanp_coded->configured = 1;
@@ -2488,6 +2555,7 @@ ble_ll_scan_initiator_start(struct ble_ll_conn_sm *connsm, uint8_t ext,
 
     return rc;
 }
+#endif
 
 /**
  * Checks to see if the scanner is enabled.
@@ -2587,7 +2655,7 @@ ble_ll_scan_common_init(void)
 #endif
 
     /* Initialize scanning timer */
-    os_cputime_timer_init(&scansm->scan_timer, ble_ll_scan_timer_cb, scansm);
+    ble_ll_tmr_init(&scansm->scan_timer, ble_ll_scan_timer_cb, scansm);
 
     /* Initialize extended scan timers */
 #if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_EXT_ADV)
@@ -2663,3 +2731,5 @@ ble_ll_scan_init(void)
     ble_ll_scan_aux_init();
 #endif
 }
+
+#endif

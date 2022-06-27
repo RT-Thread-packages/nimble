@@ -188,17 +188,6 @@ int uECC_shared_secret(const uint8_t *public_key, const uint8_t *private_key,
 	r = !EccPoint_isZero(_public, curve);
 
 clear_and_out:
-
-#ifdef __ARMCC_VERSION
-	/* erasing temporary buffer used to store secret: */
-	memset(p2, 0, sizeof(p2));
-//	__asm__ __volatile__("" :: "g"(p2) : "memory");
-	memset(tmp, 0, sizeof(tmp));
-//	__asm__ __volatile__("" :: "g"(tmp) : "memory");
-	memset(_private, 0, sizeof(_private));
-//	__asm__ __volatile__("" :: "g"(_private) : "memory");
-
-#else
 	/* erasing temporary buffer used to store secret: */
 	memset(p2, 0, sizeof(p2));
 	__asm__ __volatile__("" :: "g"(p2) : "memory");
@@ -206,7 +195,6 @@ clear_and_out:
 	__asm__ __volatile__("" :: "g"(tmp) : "memory");
 	memset(_private, 0, sizeof(_private));
 	__asm__ __volatile__("" :: "g"(_private) : "memory");
-#endif
 
 	return r;
 }

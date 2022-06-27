@@ -19,8 +19,10 @@ path += [
     cwd + '/nimble/host/services/tps/include',
     cwd + '/nimble/host/store/ram/include',
     cwd + '/nimble/host/util/include',
-    cwd + '/porting/nimble/include',
-    cwd + '/porting/npl/rtthread/include']
+    cwd + '/nimble/transport/include',
+    cwd + '/nimble/transport/common/hci_h4/include',
+    cwd + '/porting/npl/rtthread/include',
+    cwd + '/porting/nimble/include']
 
 # Host stack
 src += Split('''
@@ -57,7 +59,6 @@ src += Split('''
     nimble/host/src/ble_l2cap_coc.c
     nimble/host/src/ble_l2cap_sig.c
     nimble/host/src/ble_l2cap_sig_cmd.c
-    nimble/host/src/ble_monitor.c
     nimble/host/src/ble_sm_alg.c
     nimble/host/src/ble_sm.c
     nimble/host/src/ble_sm_cmd.c
@@ -75,6 +76,58 @@ src += Split('''
     nimble/host/services/tps/src/ble_svc_tps.c
     nimble/host/store/ram/src/ble_store_ram.c
     nimble/host/util/src/addr.c
+    ''')
+
+# HCI transport
+src += Split('''
+    nimble/transport/src/monitor.c
+    nimble/transport/src/transport.c
+    nimble/transport/common/hci_h4/src/hci_h4.c
+    nimble/transport/rtthread/src/ble_hci_rtthread.c
+    ''')
+
+# mesh
+if GetDepend(['PKG_NIMBLE_MESH']):
+    path += [cwd + '/nimble/host/mesh/include']
+
+    src += Split('''
+        nimble/host/mesh/src/access.c
+        nimble/host/mesh/src/adv_ext.c
+        nimble/host/mesh/src/adv_legacy.c
+        nimble/host/mesh/src/adv.c
+        nimble/host/mesh/src/aes-ccm.c
+        nimble/host/mesh/src/app_keys.c
+        nimble/host/mesh/src/beacon.c
+        nimble/host/mesh/src/cdb.c
+        nimble/host/mesh/src/cfg_cli.c
+        nimble/host/mesh/src/cfg_srv.c
+        nimble/host/mesh/src/cfg.c
+        nimble/host/mesh/src/crypto.c
+        nimble/host/mesh/src/friend.c
+        nimble/host/mesh/src/glue.c
+        nimble/host/mesh/src/health_cli.c
+        nimble/host/mesh/src/health_srv.c
+        nimble/host/mesh/src/heartbeat.c
+        nimble/host/mesh/src/light_model.c
+        nimble/host/mesh/src/lpn.c
+        nimble/host/mesh/src/mesh.c
+        nimble/host/mesh/src/model_cli.c
+        nimble/host/mesh/src/model_srv.c
+        nimble/host/mesh/src/msg.c
+        nimble/host/mesh/src/net.c
+        nimble/host/mesh/src/pb_adv.c
+        nimble/host/mesh/src/pb_gatt_srv.c
+        nimble/host/mesh/src/pb_gatt.c
+        nimble/host/mesh/src/prov_device.c
+        nimble/host/mesh/src/prov.c
+        nimble/host/mesh/src/provisioner.c
+        nimble/host/mesh/src/proxy_msg.c
+        nimble/host/mesh/src/proxy_srv.c
+        nimble/host/mesh/src/rpl.c
+        nimble/host/mesh/src/settings.c
+        nimble/host/mesh/src/shell.c
+        nimble/host/mesh/src/subnet.c
+        nimble/host/mesh/src/transport.c
     ''')
 
 # Few utils and data structures copied from Mynewt
@@ -146,6 +199,7 @@ if GetDepend(['PKG_NIMBLE_CTLR']):
         nimble/controller/src/ble_ll_scan.c
         nimble/controller/src/ble_ll_dtm.c
         nimble/controller/src/ble_ll_hci_ev.c
+        nimble/controller/src/ble_ll_hci_vs.c
         nimble/controller/src/ble_ll_iso.c
         nimble/controller/src/ble_ll_rfmgmt.c
         nimble/controller/src/ble_ll_scan_aux.c
@@ -156,6 +210,12 @@ if GetDepend(['PKG_NIMBLE_CTLR']):
         porting/nimble/src/hal_timer.c
         porting/npl/rtthread/src/nrf5x_isr.c
         """)
+
+# advertiser sample
+if GetDepend(['PKG_NIMBLE_SAMPLE_ADVERTISER']):
+    src += Split("""
+        apps/advertiser/src/advertiser.c
+    """)
 
 # central sample
 if GetDepend(['PKG_NIMBLE_SAMPLE_CENTRAL']):
@@ -240,7 +300,7 @@ if GetDepend(['PKG_NIMBLE_SAMPLE_EXT_ADVERTISER']):
 if GetDepend(['PKG_NIMBLE_SAMPLE_BEACON']):
     src += Glob('apps/ibeacon/src/ibeacon.c')
 
-LOCAL_CCFLAGS = ''
+LOCAL_CCFLAGS = '-Wno-format -Wno-unused-variable -Wno-unused-but-set-variable'
 
 if rtconfig.CROSS_TOOL == 'keil':
     LOCAL_CCFLAGS += ' --gnu --diag_suppress=111'
