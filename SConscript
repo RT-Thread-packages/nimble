@@ -83,7 +83,7 @@ src += Split('''
     nimble/transport/src/monitor.c
     nimble/transport/src/transport.c
     nimble/transport/common/hci_h4/src/hci_h4.c
-    nimble/transport/rtthread/src/ble_hci_rtthread.c
+    nimble/transport/rtthread/src/ble_hci_rtthread_uart.c
     ''')
 
 # mesh
@@ -165,9 +165,7 @@ else:
     CPPDEFINES = ['']
 
 if GetDepend(['PKG_NIMBLE_CTLR']):
-    path += [
-        cwd + '/nimble/transport/ram/include',
-        cwd + '/nimble/controller/include']
+    path += [cwd + '/nimble/controller/include']
         
 
     if GetDepend(['PKG_NIMBLE_BSP_NRF51']):
@@ -184,7 +182,6 @@ if GetDepend(['PKG_NIMBLE_CTLR']):
             """)
 
     src += Split("""
-        nimble/transport/ram/src/ble_hci_ram.c
         nimble/controller/src/ble_ll_sched.c
         nimble/controller/src/ble_ll_whitelist.c
         nimble/controller/src/ble_ll_ctrl.c
