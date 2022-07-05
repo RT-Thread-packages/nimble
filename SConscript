@@ -83,8 +83,12 @@ src += Split('''
     nimble/transport/src/monitor.c
     nimble/transport/src/transport.c
     nimble/transport/common/hci_h4/src/hci_h4.c
-    nimble/transport/rtthread/src/ble_hci_rtthread_uart.c
     ''')
+
+if GetDepend(['PKG_NIMBLE_HCI_USING_RTT_UART']):
+    src += Split("""
+        nimble/transport/rtthread/src/ble_hci_rtthread_uart.c
+    """)
 
 # mesh
 if GetDepend(['PKG_NIMBLE_MESH']):

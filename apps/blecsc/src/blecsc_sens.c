@@ -29,6 +29,7 @@
 #include "host/ble_hs.h"
 #include "services/gap/ble_svc_gap.h"
 #include "blecsc_sens.h"
+#include "nimble/host/util/include/host/util/util.h"
 
 /* Wheel size for simulation calculations */
 #define CSC_SIM_WHEEL_CIRCUMFERENCE_MM            2000
@@ -262,6 +263,9 @@ blecsc_on_sync(void)
     int rc;
 
     /* Figure out address to use while advertising (no privacy) */
+    rc = ble_hs_util_ensure_addr(0);
+    assert(rc == 0);
+
     rc = ble_hs_id_infer_auto(0, &blecsc_addr_type);
     assert(rc == 0);
 

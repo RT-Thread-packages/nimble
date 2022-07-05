@@ -113,13 +113,9 @@ on_reset(int reason)
     MODLOG_DFLT(INFO, "Resetting state; reason=%d\n", reason);
 }
 
-int
-main(int argc, char **argv)
+static int ble_adv()
 {
     int rc;
-
-    /* Initialize all packages. */
-    sysinit();
 
     ble_hs_cfg.sync_cb = on_sync;
     ble_hs_cfg.reset_cb = on_reset;
@@ -127,10 +123,9 @@ main(int argc, char **argv)
     rc = ble_svc_gap_device_name_set(device_name);
     assert(rc == 0);
 
-    /* As the last thing, process events from default event queue. */
-    while (1) {
-        os_eventq_run(os_eventq_dflt_get());
-    }
+    /* startup bluetooth host stack*/
+    ble_hs_thread_startup();
 
     return 0;
 }
+MSH_CMD_EXPORT_ALIAS(ble_adv, ble_adv, "bluetoooth advertise sample");

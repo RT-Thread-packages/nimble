@@ -5,7 +5,7 @@
  *
  * Change Logs:
  * Date           Author       Notes
- * xxxx-xx-xx     Lenoyan      the first version
+ * 2022-07-16     Lenoyan      the first version
  */
 
 #include <assert.h>
@@ -26,14 +26,9 @@ struct hci_h4_sm g_hci_h4sm;
 
 /* uart device handle */
 static rt_device_t g_serial;
-/* uart device name */  
-#define RTT_BLE_UART_NAME       "uart1"
 
-static int
-hci_uart_frame_cb(uint8_t pkt_type, void *data)
+static int hci_uart_frame_cb(uint8_t pkt_type, void *data)
 {
-    // TODO - pkt transport to host
-    // 使用对应接口发送 pkt 给 host
     switch (pkt_type) {
     case HCI_H4_EVT:
         return ble_transport_to_hs_evt(data);
@@ -47,8 +42,7 @@ hci_uart_frame_cb(uint8_t pkt_type, void *data)
 }
 
 // RT-Thread UART rx data
-static void 
-rtthread_uart_rx_entry(void *parameter)
+static void rtthread_uart_rx_entry(void *parameter)
 {
     uint8_t data[64];
     size_t data_len;
@@ -61,8 +55,7 @@ rtthread_uart_rx_entry(void *parameter)
 }
 
 // UART send data
-static void 
-rtthread_uart_tx(const uint8_t *buf, size_t len)
+static void rtthread_uart_tx(const uint8_t *buf, size_t len)
 {
     size_t remaining = len;
     size_t tx_size = 0;
@@ -76,12 +69,11 @@ rtthread_uart_tx(const uint8_t *buf, size_t len)
 }
 
 // init uart
-static int 
-rtthread_hci_uart_init(void)
+static int rtthread_hci_uart_init(void)
 {
     struct serial_configure config = RT_SERIAL_CONFIG_DEFAULT;  
 
-    g_serial = rt_device_find(RTT_BLE_UART_NAME);
+    g_serial = rt_device_find(PKG_NIMBLE_HCI_UART_DEVICE_NAME);
     if (!g_serial) {
         return -1;
     }
@@ -96,11 +88,10 @@ rtthread_hci_uart_init(void)
 
     rt_device_open(g_serial, RT_DEVICE_FLAG_INT_RX);
 
-    //创建轮询接收线程
     rt_thread_t rx_thread = rt_thread_create("hci_uart_rx", rtthread_uart_rx_entry,
                                             RT_NULL, 1024, 25, 10);
     if (rx_thread != RT_NULL) {
-        rt_thread_startup(rx_thread); //启动线程
+        rt_thread_startup(rx_thread);
     } else {
         return -1;
     }
@@ -108,8 +99,7 @@ rtthread_hci_uart_init(void)
     return 0;
 }
 
-int 
-ble_transport_to_ll_cmd_impl(void *buf)
+int ble_transport_to_ll_cmd_impl(void *buf)
 {
     uint8_t indicator = HCI_H4_CMD;
     uint8_t *cmd_pkt_data = (uint8_t *)buf;
@@ -123,8 +113,7 @@ ble_transport_to_ll_cmd_impl(void *buf)
     return 0;
 }
 
-int 
-ble_transport_to_ll_acl_impl(struct os_mbuf *om)
+int ble_transport_to_ll_acl_impl(struct os_mbuf *om)
 {
     uint8_t indicator = HCI_H4_ACL;
 
@@ -143,8 +132,7 @@ ble_transport_to_ll_acl_impl(struct os_mbuf *om)
     return 0;
 }
 
-static int
-rtthread_ble_transport_init(void)
+static int rtthread_ble_transport_init(void)
 {
     int rc;
     SYSINIT_ASSERT_ACTIVE();
@@ -157,4 +145,6 @@ rtthread_ble_transport_init(void)
     return 0;
 }
 
+#ifdef PKG_NIMBLE_HCI_USING_RTT_UART
 INIT_APP_EXPORT(rtthread_ble_transport_init);
+#endif
