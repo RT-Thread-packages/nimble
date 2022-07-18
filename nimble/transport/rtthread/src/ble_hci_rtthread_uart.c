@@ -21,10 +21,8 @@
 #include <rtthread.h>
 #include <rtdevice.h>
 
-/* hci_h4 rx instance  */
 struct hci_h4_sm g_hci_h4sm;
 
-/* uart device handle */
 static rt_device_t g_serial;
 
 static int hci_uart_frame_cb(uint8_t pkt_type, void *data)
@@ -41,7 +39,6 @@ static int hci_uart_frame_cb(uint8_t pkt_type, void *data)
     return -1;
 }
 
-// RT-Thread UART rx data
 static void rtthread_uart_rx_entry(void *parameter)
 {
     uint8_t data[64];
@@ -54,7 +51,6 @@ static void rtthread_uart_rx_entry(void *parameter)
     }
 }
 
-// UART send data
 static void rtthread_uart_tx(const uint8_t *buf, size_t len)
 {
     size_t remaining = len;
@@ -68,7 +64,6 @@ static void rtthread_uart_tx(const uint8_t *buf, size_t len)
 
 }
 
-// init uart
 static int rtthread_hci_uart_init(void)
 {
     struct serial_configure config = RT_SERIAL_CONFIG_DEFAULT;  
@@ -103,12 +98,12 @@ int ble_transport_to_ll_cmd_impl(void *buf)
 {
     uint8_t indicator = HCI_H4_CMD;
     uint8_t *cmd_pkt_data = (uint8_t *)buf;
-    size_t pkt_len = cmd_pkt_data[2] + 3;  // parameter_len + header_len(3) 
+    size_t pkt_len = cmd_pkt_data[2] + 3; 
     
-    rtthread_uart_tx(&indicator, 1);  // send indicator
-    rtthread_uart_tx(cmd_pkt_data, pkt_len);  //send cmd pkt data
+    rtthread_uart_tx(&indicator, 1);
+    rtthread_uart_tx(cmd_pkt_data, pkt_len);
 
-    ble_transport_free(buf);  //free hci pkt 
+    ble_transport_free(buf);
 
     return 0;
 }
@@ -117,9 +112,8 @@ int ble_transport_to_ll_acl_impl(struct os_mbuf *om)
 {
     uint8_t indicator = HCI_H4_ACL;
 
-    rtthread_uart_tx(&indicator, 1);  // send indicator
+    rtthread_uart_tx(&indicator, 1);
 
-    // single-list, send all node data
     struct os_mbuf *x = om;
     while (x != NULL)
     {
@@ -127,7 +121,7 @@ int ble_transport_to_ll_acl_impl(struct os_mbuf *om)
         x = SLIST_NEXT(x, om_next);
     }
     
-    os_mbuf_free_chain(om); // free os_mbuf chain
+    os_mbuf_free_chain(om);
 
     return 0;
 }
@@ -140,7 +134,6 @@ static int rtthread_ble_transport_init(void)
     rc = rtthread_hci_uart_init();
     SYSINIT_PANIC_ASSERT(rc == 0);
 
-    // init hci_h4 instance
     hci_h4_sm_init(&g_hci_h4sm, &hci_h4_allocs_from_ll, hci_uart_frame_cb);
     return 0;
 }

@@ -3,6 +3,7 @@
  *
  * Date           Author       Notes
  * 2018-12-29     ChenYong     first implementation
+ * 2022-05-20     Jackistang   add ble host auto start
  */
 
 #ifndef __NUMBLE_CONFIG_H__
