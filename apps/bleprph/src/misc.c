@@ -18,6 +18,7 @@
  */
 
 #include "bleprph.h"
+#include "host/ble_hs.h"
 
 /**
  * Utility function to log an array of bytes.

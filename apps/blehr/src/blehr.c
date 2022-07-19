@@ -27,6 +27,7 @@
 #include "host/ble_hs.h"
 #include "services/gap/ble_svc_gap.h"
 #include "blehr_sens.h"
+#include "nimble/host/util/include/host/util/util.h"
 
 static bool notify_state;
 static uint16_t notify_conn_handle;
@@ -208,6 +209,9 @@ blehr_on_sync(void)
     int rc;
 
     /* Use privacy */
+    rc = ble_hs_util_ensure_addr(0);
+    assert(rc == 0);
+
     rc = ble_hs_id_infer_auto(0, &blehr_addr_type);
     assert(rc == 0);
 

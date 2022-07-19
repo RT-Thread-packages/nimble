@@ -22,9 +22,7 @@
 #include <stdio.h>
 #include "os/os.h"
 #include "nimble/hci_common.h"
-#include "nimble/ble_hci_trans.h"
 #include "host/ble_gap.h"
-#include "host/ble_monitor.h"
 #include "ble_hs_priv.h"
 
 _Static_assert(sizeof (struct hci_data_hdr) == BLE_HCI_DATA_HDR_SZ,
@@ -62,6 +60,10 @@ static ble_hs_hci_evt_le_fn ble_hs_hci_evt_le_periodic_adv_rpt;
 static ble_hs_hci_evt_le_fn ble_hs_hci_evt_le_periodic_adv_sync_lost;
 static ble_hs_hci_evt_le_fn ble_hs_hci_evt_le_scan_req_rcvd;
 static ble_hs_hci_evt_le_fn ble_hs_hci_evt_le_periodic_adv_sync_transfer;
+#if MYNEWT_VAL(BLE_POWER_CONTROL)
+static ble_hs_hci_evt_le_fn ble_hs_hci_evt_le_pathloss_threshold;
+static ble_hs_hci_evt_le_fn ble_hs_hci_evt_le_transmit_power_report;
+#endif
 
 /* Statistics */
 struct host_hci_stats
@@ -118,6 +120,10 @@ static ble_hs_hci_evt_le_fn * const ble_hs_hci_evt_le_dispatch[] = {
     [BLE_HCI_LE_SUBEV_ADV_SET_TERMINATED] = ble_hs_hci_evt_le_adv_set_terminated,
     [BLE_HCI_LE_SUBEV_SCAN_REQ_RCVD] = ble_hs_hci_evt_le_scan_req_rcvd,
     [BLE_HCI_LE_SUBEV_PERIODIC_ADV_SYNC_TRANSFER] = ble_hs_hci_evt_le_periodic_adv_sync_transfer,
+#if MYNEWT_VAL(BLE_POWER_CONTROL)
+    [BLE_HCI_LE_SUBEV_PATH_LOSS_THRESHOLD] = ble_hs_hci_evt_le_pathloss_threshold,
+    [BLE_HCI_LE_SUBEV_TRANSMIT_POWER_REPORT] = ble_hs_hci_evt_le_transmit_power_report,
+#endif
 };
 
 #define BLE_HS_HCI_EVT_LE_DISPATCH_SZ \
@@ -503,20 +509,21 @@ ble_hs_hci_evt_le_rd_rem_used_feat_complete(uint8_t subevent, const void *data,
 static int
 ble_hs_hci_decode_legacy_type(uint16_t evt_type)
 {
-     switch (evt_type) {
-     case BLE_HCI_LEGACY_ADV_EVTYPE_ADV_IND:
-         return BLE_HCI_ADV_RPT_EVTYPE_ADV_IND;
-     case BLE_HCI_LEGACY_ADV_EVTYPE_ADV_DIRECT_IND:
-         return BLE_HCI_ADV_RPT_EVTYPE_DIR_IND;
-     case BLE_HCI_LEGACY_ADV_EVTYPE_ADV_SCAN_IND:
-         return BLE_HCI_ADV_RPT_EVTYPE_SCAN_IND;
-     case BLE_HCI_LEGACY_ADV_EVTYPE_ADV_NONCON_IND:
-         return BLE_HCI_ADV_RPT_EVTYPE_NONCONN_IND;
-     case BLE_HCI_LEGACY_ADV_EVTYPE_SCAN_RSP_ADV_IND:
-         return BLE_HCI_ADV_RPT_EVTYPE_SCAN_RSP;
-     default:
-         return -1;
-     }
+    switch (evt_type) {
+    case BLE_HCI_LEGACY_ADV_EVTYPE_ADV_IND:
+        return BLE_HCI_ADV_RPT_EVTYPE_ADV_IND;
+    case BLE_HCI_LEGACY_ADV_EVTYPE_ADV_DIRECT_IND:
+        return BLE_HCI_ADV_RPT_EVTYPE_DIR_IND;
+    case BLE_HCI_LEGACY_ADV_EVTYPE_ADV_SCAN_IND:
+        return BLE_HCI_ADV_RPT_EVTYPE_SCAN_IND;
+    case BLE_HCI_LEGACY_ADV_EVTYPE_ADV_NONCON_IND:
+        return BLE_HCI_ADV_RPT_EVTYPE_NONCONN_IND;
+    case BLE_HCI_LEGACY_ADV_EVTYPE_SCAN_RSP_ADV_IND:
+    case BLE_HCI_LEGACY_ADV_EVTYPE_SCAN_RSP_ADV_SCAN_IND:
+        return BLE_HCI_ADV_RPT_EVTYPE_SCAN_RSP;
+    default:
+        return -1;
+    }
 }
 #endif
 
@@ -641,6 +648,36 @@ ble_hs_hci_evt_le_periodic_adv_sync_lost(uint8_t subevent, const void *data,
 #endif
     return 0;
 }
+
+#if MYNEWT_VAL(BLE_POWER_CONTROL)
+static int
+ble_hs_hci_evt_le_pathloss_threshold(uint8_t subevent, const void *data,
+					     unsigned int len)
+{
+    const struct ble_hci_ev_le_subev_path_loss_threshold *ev = data;
+
+    if (len != sizeof(*ev)) {
+	return BLE_HS_EBADDATA;
+    }
+
+    ble_gap_rx_le_pathloss_threshold(ev);
+    return 0;
+}
+
+static int
+ble_hs_hci_evt_le_transmit_power_report(uint8_t subevent, const void *data,
+					     unsigned int len)
+{
+    const struct ble_hci_ev_le_subev_transmit_power_report *ev = data;
+
+    if (len != sizeof(*ev)) {
+	return BLE_HS_EBADDATA;
+    }
+
+    ble_gap_rx_transmit_power_report(ev);
+    return 0;
+}
+#endif
 
 static int
 ble_hs_hci_evt_le_periodic_adv_sync_transfer(uint8_t subevent, const void *data,
@@ -795,7 +832,7 @@ ble_hs_hci_evt_le_phy_update_complete(uint8_t subevent, const void *data,
 #endif
 
 int
-ble_hs_hci_evt_process(const struct ble_hci_ev *ev)
+ble_hs_hci_evt_process(struct ble_hci_ev *ev)
 {
     const struct ble_hs_hci_evt_dispatch_entry *entry;
     int rc;
@@ -812,7 +849,7 @@ ble_hs_hci_evt_process(const struct ble_hci_ev *ev)
         rc = entry->cb(ev->opcode, ev->data, ev->length);
     }
 
-    ble_hci_trans_buf_free((uint8_t *) ev);
+    ble_transport_free(ev);
 
     return rc;
 }

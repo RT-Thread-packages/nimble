@@ -3,6 +3,7 @@
  *
  * Date           Author       Notes
  * 2018-12-29     ChenYong     first implementation
+ * 2022-05-20     Jackistang   add ble host auto start
  */
 
 #ifndef __NUMBLE_CONFIG_H__
@@ -62,6 +63,8 @@
 #ifdef PKG_NIMBLE_HOST_THREAD_PRIORITY
 #define MYNEWT_VAL_BLE_HOST_THREAD_PRIORITY      (PKG_NIMBLE_HOST_THREAD_PRIORITY)
 #endif
+
+#define MYNEWT_VAL_BLE_HS_AUTO_START 1
 
 /**
  * Mesh Configuration

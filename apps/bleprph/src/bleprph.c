@@ -315,6 +315,8 @@ int bleprph_entry(void)
 
     /* startup bluetooth host stack*/
     ble_hs_thread_startup();
+    
+    return 0;
 }
 
 MSH_CMD_EXPORT_ALIAS(bleprph_entry, bleprph, "bluetooth peripheral role sample");

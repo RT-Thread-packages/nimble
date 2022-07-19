@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "nimble/ble.h"
+#include "host/ble_gatt.h"
 #include "host/ble_uuid.h"
 #include "host/ble_store.h"
 #include "ble_hs_priv.h"
@@ -1396,7 +1397,7 @@ ble_gatts_send_next_indicate(uint16_t conn_handle)
         return BLE_HS_ENOENT;
     }
 
-    rc = ble_gattc_indicate(conn_handle, chr_val_handle);
+    rc = ble_gatts_indicate(conn_handle, chr_val_handle);
     if (rc != 0) {
         return rc;
     }
@@ -1634,11 +1635,11 @@ ble_gatts_tx_notifications_one_chr(uint16_t chr_val_handle)
             break;
 
         case BLE_ATT_OP_NOTIFY_REQ:
-            ble_gattc_notify(conn_handle, chr_val_handle);
+            ble_gatts_notify(conn_handle, chr_val_handle);
             break;
 
         case BLE_ATT_OP_INDICATE_REQ:
-            ble_gattc_indicate(conn_handle, chr_val_handle);
+            ble_gatts_indicate(conn_handle, chr_val_handle);
             break;
 
         default:
@@ -1781,7 +1782,7 @@ ble_gatts_bonding_restored(uint16_t conn_handle)
             break;
 
         case BLE_ATT_OP_NOTIFY_REQ:
-            rc = ble_gattc_notify(conn_handle, cccd_value.chr_val_handle);
+            rc = ble_gatts_notify(conn_handle, cccd_value.chr_val_handle);
             if (rc == 0) {
                 cccd_value.value_changed = 0;
                 ble_store_write_cccd(&cccd_value);
@@ -1789,7 +1790,7 @@ ble_gatts_bonding_restored(uint16_t conn_handle)
             break;
 
         case BLE_ATT_OP_INDICATE_REQ:
-            ble_gattc_indicate(conn_handle, cccd_value.chr_val_handle);
+            ble_gatts_indicate(conn_handle, cccd_value.chr_val_handle);
             break;
 
         default:

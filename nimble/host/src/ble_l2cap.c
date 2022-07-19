@@ -21,6 +21,7 @@
 #include <errno.h>
 #include "syscfg/syscfg.h"
 #include "os/os.h"
+#include "host/ble_l2cap.h"
 #include "nimble/ble.h"
 #include "nimble/hci_common.h"
 #include "ble_hs_priv.h"
@@ -176,13 +177,6 @@ ble_l2cap_get_chan_info(struct ble_l2cap_chan *chan, struct ble_l2cap_chan_info 
 #endif
 
     return 0;
-}
-
-int
-ble_l2cap_ping(uint16_t conn_handle, ble_l2cap_ping_fn cb,
-               const void *data, uint16_t data_len)
-{
-    return ble_l2cap_sig_ping(conn_handle, cb, data, data_len);
 }
 
 int
@@ -394,14 +388,27 @@ ble_l2cap_rx(struct ble_hs_conn *conn,
             goto err;
         }
 
+        /* For CIDs from dynamic range we check if SDU size isn't larger than MPS */
+        if (chan->dcid >= 0x0040 && chan->dcid <= 0x007F && l2cap_hdr.len > chan->my_coc_mps) {
+            /* Data exceeds MPS */
+            BLE_HS_LOG(ERROR, "error: sdu_len > chan->my_coc_mps (%d>%d)\n",
+                       l2cap_hdr.len, chan->my_coc_mps);
+            ble_l2cap_disconnect(chan);
+            rc = BLE_HS_EBADDATA;
+            goto err;
+        }
+
         if (chan->rx_buf != NULL) {
             /* Previous data packet never completed.  Discard old packet. */
             ble_l2cap_remove_rx(conn, chan);
         }
 
         if (l2cap_hdr.len > ble_l2cap_get_mtu(chan)) {
-            /* More data then we expected on the channel */
+            /* More data than we expected on the channel.
+             * Disconnect peer with invalid behaviour
+             */
             rc = BLE_HS_EBADDATA;
+            ble_l2cap_disconnect(chan);
             goto err;
         }
 
