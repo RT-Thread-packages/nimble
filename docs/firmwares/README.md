@@ -52,6 +52,16 @@ qemu-system-arm -M vexpress-a9 -smp cpus=2 -kernel rtthread.bin -nographic -sd s
 
 
 
+### hci_uart_nrf52832dk.hex
+
+![nrf52dk_nrf52832](./images/nrf52dk_nrf52832.jpg)
+
+该固件使用的是 [nrf52832dk](https://www.nordicsemi.com/Products/Development-hardware/nRF52-DK) 开发板，HCI 传输层为 H4 协议，波特率 115200，使用硬件控制流 CTS/RTS。
+
+固件下载与 [hci_uart_nrf52840dk.hex](###hci_uart_nrf52840dk.hex) 的方式一致。
+
+
+
 ### hci_usb_nrf52840dongle.hex
 
 <img src="./images/nrf52840dongle.png" alt="nrf52840dongle" style="zoom: 67%;" />

@@ -301,11 +301,14 @@ if GetDepend(['PKG_NIMBLE_SAMPLE_EXT_ADVERTISER']):
 if GetDepend(['PKG_NIMBLE_SAMPLE_BEACON']):
     src += Glob('apps/ibeacon/src/ibeacon.c')
 
-LOCAL_CCFLAGS = '-Wno-format -Wno-unused-variable -Wno-unused-but-set-variable'
+LOCAL_CCFLAGS = ''
 
 if rtconfig.CROSS_TOOL == 'keil':
     LOCAL_CCFLAGS += ' --gnu --diag_suppress=111'
     
+if rtconfig.CROSS_TOOL == 'gcc':
+    LOCAL_CCFLAGS += ' -Wno-format -Wno-unused-variable -Wno-unused-but-set-variable'
+
 group = DefineGroup('nimble', src, depend = ['PKG_USING_NIMBLE'], CPPPATH = path, CPPDEFINES = CPPDEFINES, LOCAL_CCFLAGS = LOCAL_CCFLAGS)
 
 Return('group')
