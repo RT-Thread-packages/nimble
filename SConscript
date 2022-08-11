@@ -166,7 +166,7 @@ src += Split('''
 if GetDepend(['PKG_NIMBLE_CTLR']):
     CPPDEFINES = ['NIMBLE_CFG_CONTROLLER=1']
 else:
-    CPPDEFINES = ['']
+    CPPDEFINES = []
 
 if GetDepend(['PKG_NIMBLE_CTLR']):
     path += [cwd + '/nimble/controller/include']
