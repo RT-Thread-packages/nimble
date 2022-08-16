@@ -76,7 +76,6 @@ static int rtthread_hci_uart_init(void)
     config.baud_rate = BAUD_RATE_115200;
     config.data_bits = DATA_BITS_8;
     config.stop_bits = STOP_BITS_1;
-    config.bufsz     = 128;
 #ifndef RT_USING_SERIAL_V2
     config.bufsz     = 128;
 #endif

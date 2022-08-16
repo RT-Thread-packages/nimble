@@ -305,7 +305,7 @@ LOCAL_CCFLAGS = ''
 
 if rtconfig.CROSS_TOOL == 'keil':
     LOCAL_CCFLAGS += ' --gnu --diag_suppress=111'
-    # __BYTE_ORDER__ & __ORDER_BIG_ENDIAN__ & __ORDER_LITTLE_ENDIAN__ is not defined in keil
+    # __BYTE_ORDER__ & __ORDER_BIG_ENDIAN__ & __ORDER_LITTLE_ENDIAN__ is not defined in keil, the specific values comes from gcc.
     CPPDEFINES.append('__ORDER_LITTLE_ENDIAN__=1234')
     CPPDEFINES.append('__ORDER_BIG_ENDIAN__=4321')
     CPPDEFINES.append('__BYTE_ORDER__=1234')
