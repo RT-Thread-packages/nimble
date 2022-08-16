@@ -77,11 +77,18 @@ static int rtthread_hci_uart_init(void)
     config.data_bits = DATA_BITS_8;
     config.stop_bits = STOP_BITS_1;
     config.bufsz     = 128;
+#ifndef RT_USING_SERIAL_V2
+    config.bufsz     = 128;
+#endif
     config.parity    = PARITY_NONE;
 
     rt_device_control(g_serial, RT_DEVICE_CTRL_CONFIG, &config);
 
+#ifdef RT_USING_SERIAL_V2
+    rt_device_open(g_serial, RT_DEVICE_FLAG_RX_NON_BLOCKING | RT_DEVICE_FLAG_TX_BLOCKING);
+#else
     rt_device_open(g_serial, RT_DEVICE_FLAG_INT_RX);
+#endif
 
     rt_thread_t rx_thread = rt_thread_create("hci_uart_rx", rtthread_uart_rx_entry,
                                             RT_NULL, 1024, 25, 10);
