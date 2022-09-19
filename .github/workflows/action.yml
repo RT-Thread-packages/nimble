@@ -209,6 +209,7 @@ jobs:
         run: |
           source ~/.env/env.sh
           sed -i "s/# CONFIG_PKG_USING_NIMBLE is not set/CONFIG_PKG_USING_NIMBLE=y/g" bsp/$RTT_BSP/.config
+          scons --pyconfig-silent -C bsp/$RTT_BSP
           sed -i "s/CONFIG_PKG_NIMBLE_CTLR=y/CONFIG_PKG_NIMBLE_CTLR=n/g" bsp/$RTT_BSP/.config
           sed -i "s/# CONFIG_PKG_NIMBLE_HCI_USING_RTT_UART is not set/CONFIG_PKG_NIMBLE_HCI_USING_RTT_UART=y/g" bsp/$RTT_BSP/.config
           sed -i "s/CONFIG_PKG_NIMBLE_VER="v1.0.0"/CONFIG_PKG_NIMBLE_VER="latest"/g" bsp/$RTT_BSP/.config
