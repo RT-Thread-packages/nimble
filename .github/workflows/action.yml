@@ -30,7 +30,7 @@ jobs:
       matrix:
        legs:
          - {RTT_BSP: "acm32/acm32f0x0-nucleo", RTT_TOOL_CHAIN: "sourcery-arm"}
-         - {RTT_BSP: "CME_M7", RTT_TOOL_CHAIN: "sourcery-arm"}
+        # - {RTT_BSP: "CME_M7", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "apm32/apm32f103xe-minibroard", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "apollo2", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "asm9260t", RTT_TOOL_CHAIN: "sourcery-arm"}
@@ -38,7 +38,7 @@ jobs:
          - {RTT_BSP: "at91/at91sam9260", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "allwinner_tina", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "cypress/psoc6-cy8cproto-4343w", RTT_TOOL_CHAIN: "sourcery-arm"}
-         - {RTT_BSP: "ft32/ft32f072xb-starter", RTT_TOOL_CHAIN: "sourcery-arm"}
+        # - {RTT_BSP: "ft32/ft32f072xb-starter", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "gd32/arm/gd32103c-eval", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "gd32/arm/gd32105c-eval", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "gd32/arm/gd32105r-start", RTT_TOOL_CHAIN: "sourcery-arm"}
@@ -65,39 +65,39 @@ jobs:
          - {RTT_BSP: "tm4c129x", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "lpc55sxx/lpc55s69_nxp_evk", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "lpc408x", RTT_TOOL_CHAIN: "sourcery-arm"}
-         - {RTT_BSP: "lpc1114", RTT_TOOL_CHAIN: "sourcery-arm"}
-         - {RTT_BSP: "lpc54114-lite", RTT_TOOL_CHAIN: "sourcery-arm"}
+         #- {RTT_BSP: "lpc1114", RTT_TOOL_CHAIN: "sourcery-arm"}
+         #- {RTT_BSP: "lpc54114-lite", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "mini2440", RTT_TOOL_CHAIN: "sourcery-arm"}
-         - {RTT_BSP: "nrf5x/nrf51822", RTT_TOOL_CHAIN: "sourcery-arm"}
+         #- {RTT_BSP: "nrf5x/nrf51822", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "nrf5x/nrf52832", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "nrf5x/nrf52833", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "nrf5x/nrf52840", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "qemu-vexpress-a9", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "qemu-vexpress-gemini", RTT_TOOL_CHAIN: "sourcery-arm"}
-         - {RTT_BSP: "stm32/stm32f072-st-nucleo", RTT_TOOL_CHAIN: "sourcery-arm"}
+         #- {RTT_BSP: "stm32/stm32f072-st-nucleo", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "stm32/stm32f091-st-nucleo", RTT_TOOL_CHAIN: "sourcery-arm"}
-         - {RTT_BSP: "stm32/stm32f103-100ask-mini", RTT_TOOL_CHAIN: "sourcery-arm"}
+         #- {RTT_BSP: "stm32/stm32f103-100ask-mini", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "stm32/stm32f103-100ask-pro", RTT_TOOL_CHAIN: "sourcery-arm"}
-         - {RTT_BSP: "stm32/stm32f103-atk-nano", RTT_TOOL_CHAIN: "sourcery-arm"}
+         #- {RTT_BSP: "stm32/stm32f103-atk-nano", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "stm32/stm32f103-atk-warshipv3", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "stm32/stm32f103-blue-pill", RTT_TOOL_CHAIN: "sourcery-arm"}
-         - {RTT_BSP: "stm32/stm32f103-dofly-lyc8", RTT_TOOL_CHAIN: "sourcery-arm"}
+        # - {RTT_BSP: "stm32/stm32f103-dofly-lyc8", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "stm32/stm32f103-dofly-M3S", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "stm32/stm32f103-fire-arbitrary", RTT_TOOL_CHAIN: "sourcery-arm"}
-         - {RTT_BSP: "stm32/stm32f103-gizwits-gokitv21", RTT_TOOL_CHAIN: "sourcery-arm"}
+        # - {RTT_BSP: "stm32/stm32f103-gizwits-gokitv21", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "stm32/stm32f103-hw100k-ibox", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "stm32/stm32f103-onenet-nbiot", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "stm32/stm32f103-yf-ufun", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "stm32/stm32f107-uc-eval", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "stm32/stm32f207-st-nucleo", RTT_TOOL_CHAIN: "sourcery-arm"}
-         - {RTT_BSP: "stm32/stm32f302-st-nucleo", RTT_TOOL_CHAIN: "sourcery-arm"}
+         #- {RTT_BSP: "stm32/stm32f302-st-nucleo", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "stm32/stm32f401-st-nucleo", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "stm32/stm32f405-smdz-breadfruit", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "stm32/stm32f407-armfly-v5", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "stm32/stm32f407-atk-explorer", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "stm32/stm32f407-robomaster-c", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "stm32/stm32f407-st-discovery", RTT_TOOL_CHAIN: "sourcery-arm"}
-         - {RTT_BSP: "stm32/stm32f410-st-nucleo", RTT_TOOL_CHAIN: "sourcery-arm"}
+         #- {RTT_BSP: "stm32/stm32f410-st-nucleo", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "stm32/stm32f411-atk-nano", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "stm32/stm32f411-st-nucleo", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "stm32/stm32f411-weact-MiniF4", RTT_TOOL_CHAIN: "sourcery-arm"}
@@ -116,8 +116,8 @@ jobs:
          - {RTT_BSP: "stm32/stm32f767-fire-challenger-v1", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "stm32/stm32f767-st-nucleo", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "stm32/stm32f769-st-disco", RTT_TOOL_CHAIN: "sourcery-arm"}
-         - {RTT_BSP: "stm32/stm32g070-st-nucleo", RTT_TOOL_CHAIN: "sourcery-arm"}
-         - {RTT_BSP: "stm32/stm32g071-st-nucleo", RTT_TOOL_CHAIN: "sourcery-arm"}
+         #- {RTT_BSP: "stm32/stm32g070-st-nucleo", RTT_TOOL_CHAIN: "sourcery-arm"}
+         #- {RTT_BSP: "stm32/stm32g071-st-nucleo", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "stm32/stm32g431-st-nucleo", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "stm32/stm32g474-st-nucleo", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "stm32/stm32h743-armfly-v7", RTT_TOOL_CHAIN: "sourcery-arm"}
@@ -130,12 +130,12 @@ jobs:
          - {RTT_BSP: "stm32/stm32l4r9-st-eval", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "stm32/stm32l4r9-st-sensortile-box", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "stm32/stm32l010-st-nucleo", RTT_TOOL_CHAIN: "sourcery-arm"}
-         - {RTT_BSP: "stm32/stm32l053-st-nucleo", RTT_TOOL_CHAIN: "sourcery-arm"}
-         - {RTT_BSP: "stm32/stm32l412-st-nucleo", RTT_TOOL_CHAIN: "sourcery-arm"}
-         - {RTT_BSP: "stm32/stm32l431-BearPi", RTT_TOOL_CHAIN: "sourcery-arm"}
-         - {RTT_BSP: "stm32/stm32l432-st-nucleo", RTT_TOOL_CHAIN: "sourcery-arm"}
+         #- {RTT_BSP: "stm32/stm32l053-st-nucleo", RTT_TOOL_CHAIN: "sourcery-arm"}
+         #- {RTT_BSP: "stm32/stm32l412-st-nucleo", RTT_TOOL_CHAIN: "sourcery-arm"}
+        # - {RTT_BSP: "stm32/stm32l431-BearPi", RTT_TOOL_CHAIN: "sourcery-arm"}
+         #- {RTT_BSP: "stm32/stm32l432-st-nucleo", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "stm32/stm32l433-ali-startkit", RTT_TOOL_CHAIN: "sourcery-arm"}
-         - {RTT_BSP: "stm32/stm32l433-st-nucleo", RTT_TOOL_CHAIN: "sourcery-arm"}
+         #- {RTT_BSP: "stm32/stm32l433-st-nucleo", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "stm32/stm32l452-st-nucleo", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "stm32/stm32l475-atk-pandora", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "stm32/stm32l475-st-discovery", RTT_TOOL_CHAIN: "sourcery-arm"}
@@ -147,7 +147,7 @@ jobs:
          - {RTT_BSP: "stm32/stm32mp157a-st-ev1", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "stm32/stm32u575-st-nucleo", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "stm32/stm32wb55-st-nucleo", RTT_TOOL_CHAIN: "sourcery-arm"}
-         - {RTT_BSP: "wch/arm/ch32f103c8-core", RTT_TOOL_CHAIN: "sourcery-arm"}
+         #- {RTT_BSP: "wch/arm/ch32f103c8-core", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "wch/arm/ch32f203r-evt", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "synwit/swm320", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "synwit/swm341", RTT_TOOL_CHAIN: "sourcery-arm"}
@@ -212,7 +212,8 @@ jobs:
           scons --pyconfig-silent -C bsp/$RTT_BSP
           sed -i "s/CONFIG_PKG_NIMBLE_CTLR=y/CONFIG_PKG_NIMBLE_CTLR=n/g" bsp/$RTT_BSP/.config
           sed -i "s/# CONFIG_PKG_NIMBLE_HCI_USING_RTT_UART is not set/CONFIG_PKG_NIMBLE_HCI_USING_RTT_UART=y/g" bsp/$RTT_BSP/.config
-          sed -i "s/CONFIG_PKG_NIMBLE_VER="v1.0.0"/CONFIG_PKG_NIMBLE_VER="latest"/g" bsp/$RTT_BSP/.config
+          sed -i "s/CONFIG_PKG_USING_NIMBLE_V100=y/# CONFIG_PKG_USING_NIMBLE_V100 is not set/g" bsp/$RTT_BSP/.config
+          sed -i "s/# CONFIG_PKG_USING_NIMBLE_LATEST_VERSION is not set/CONFIG_PKG_USING_NIMBLE_LATEST_VERSION=y/g" bsp/$RTT_BSP/.config
           scons --pyconfig-silent -C bsp/$RTT_BSP
           cat bsp/$RTT_BSP/.config
           pushd bsp/$RTT_BSP && pkgs --update && popd
