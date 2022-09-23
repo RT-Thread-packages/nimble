@@ -9,7 +9,7 @@
 
 ## 1 介绍
 
-NimBLE 软件包是 RT-Thread 基于 [Apache NimBLE](https://github.com/apache/mynewt-nimble) 开源蓝牙 5.0 协议栈的移植实现，该协议栈提供完整的 Host 层和 Controller 层支持，目前支持 Nordic nRF51 和 nRF52 系列芯片。
+NimBLE 软件包是 RT-Thread 基于 [Apache NimBLE](https://github.com/apache/mynewt-nimble) 开源蓝牙 5.0 协议栈的移植实现，该协议栈提供完整的 Host 层和 Controller 层支持，1.0 版本支持 Nordic nRF51 和 nRF52 系列芯片完整部署；最新版本可实现 RT-Thread 下支持 Host 层搭配串口连接外部 Controller 芯片使用。
 
 ### 1.1 主要特性
 
@@ -55,6 +55,7 @@ NimBLE 软件包是 RT-Thread 基于 [Apache NimBLE](https://github.com/apache/m
 ```
 NimBLE
    ├───apps                   /* Bluetooth 示例应用程序 */
+   │   ├───advertiser
    │   ├───blecent
    │   ├───blecsc
    │   ├───blehci
@@ -99,10 +100,9 @@ NimBLE
    │   │   └───nimble
    │   ├───src
    │   └───transport          /* HCI 传输抽象层 */
-   │       ├───emspi
-   │       ├───ram
-   │       ├───socket
-   │       └───uart
+   │       ├───common         /* h4 协议工具 */
+   │       ├───include
+   │       └───rtthread       /* RT-Thread UART 对接 HCI 层代码 */
    └───porting                /* OS 抽象层及系统配置 */
        ├───nimble
        │   ├───include
@@ -112,6 +112,7 @@ NimBLE
                ├───include
                │   ├───config /* NimBLE 协议栈配置选项 */
                │   ├───console
+               │   ├───logcfg /* RT-Thread rtdbg 日志对接 */
                │   └───nimble
                └───src
 ```
@@ -136,7 +137,7 @@ RT-Thread online packages
       Host Stack Configuration  --->
       Controller Configuration  --->
       Bluetooth Mesh support  --->
-      HCI Transport support  ----
+      HCI Transport support  ---->
       Device Driver support  ----
       Log level (INFO)  --->
       Bluetooth Samples (Not enable sample)  --->
@@ -152,8 +153,8 @@ RT-Thread online packages
 **Host Stack Configuration**  ：  配置 Host 相关功能；   
 **Controller Configuration**  ：  配置 Controller 相关功能；   
 **Bluetooth Mesh support**  ：  Mesh 特性支持及配置；   
-**HCI Transport support** ： 配置HCI层传输方式   
-**Device Driver support ** ： 底层 SOC Phy 支持   
+**HCI Transport support** ： 配置HCI层传输方式 ;  
+**Device Driver support** ： 底层 SOC Phy 支持 ;  
 **Log level (INFO)**  ：  配置协议栈日志等级；   
 **Bluetooth Samples**  ：  配置示例应用；   
 **Version**  ：  软件包版本选择；   
@@ -162,10 +163,21 @@ RT-Thread online packages
 
 ## 3 使用 NimBLE 软件包
 
-配合独立的 nrf52832-nimble bsp 使用，参考 https://github.com/EvalZero/nrf52832-nimble 。
+1.0 版本配合独立的 nrf52832-nimble bsp 使用，参考 https://github.com/EvalZero/nrf52832-nimble 。
+
+最新版本特性支持 RT-Thread 搭配 UART 外接蓝牙Controller卡片使用，参考以下文档：
+
+-    [QEMU + 蓝牙Controller卡片使用 NimBLE](https://club.rt-thread.org/ask/article/47e1aad061e7a53c.html)
+-   [如何在 ART-Pi 的 bsp 工程中使用 NimBLE 蓝牙协议栈](https://club.rt-thread.org/ask/article/2a90783d5ac51641.html)
+-   [如何在 ART-Pi 的 Studio 工程中使用 NimBLE 蓝牙协议栈](https://club.rt-thread.org/ask/article/ed1e170fb2a30f0a.html)
+
+外部蓝牙 Controller 选择及固件可参考 [蓝牙控制器固件](https://github.com/RT-Thread-packages/nimble/tree/master/docs/firmwares)
 
 ## 4 注意事项
-- NimBLE 当前处于开发阶段，暂时只支持 Nodic nRF52832 MCU，参见 [nrf52832-bsp](https://github.com/EvalZero/nrf52832-nimble)
+- 如需使用 NimBLE Host层 和 Controller层完整部署，则需选择 1.0 版本运行。
+- 1.0 版本暂时只支持 Nodic nRF52832 nRF52840 MCU，参见 [nrf52832-bsp](https://github.com/EvalZero/nrf52832-nimble)
+- 最新版本目前仅能在 RT-Thread 上部署 Host 层，需要使用串口搭配外部蓝牙 Controller 芯片使用。 
+- 文档中心相关资料：RT-Thread 标准版 -> 软件包 -> NimBLE 用户手册
 
 ## 5 联系方式 & 感谢
 
