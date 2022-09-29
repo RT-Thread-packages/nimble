@@ -52,6 +52,16 @@ NimBLE 软件包是 RT-Thread 基于 [Apache NimBLE](https://github.com/apache/m
 
 ### 1.4  目录结构
 
+```txt
+    📦NimBLE
+    ┣ 📂apps 
+    ┣ 📂docs
+    ┣ 📂ext
+    ┣ 📂nimble
+    ┣ 📂porting
+    ┗ 📂targets      
+```
+
 ```
 NimBLE
    ├───apps                   /* Bluetooth 示例应用程序 */
