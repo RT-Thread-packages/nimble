@@ -51,7 +51,7 @@ jobs:
          - {RTT_BSP: "gd32/arm/gd32407v-start", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "gd32/arm/gd32450z-eval", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "gd32e230k-start", RTT_TOOL_CHAIN: "sourcery-arm"}
-         - {RTT_BSP: "gd32vf103v-eval", RTT_TOOL_CHAIN: "sourcery-riscv-none-embed"}
+         #- {RTT_BSP: "gd32vf103v-eval", RTT_TOOL_CHAIN: "sourcery-riscv-none-embed"}
          - {RTT_BSP: "gd32303e-eval", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "gd32450z-eval", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "imx6sx/cortex-a9", RTT_TOOL_CHAIN: "sourcery-arm"}
@@ -170,11 +170,11 @@ jobs:
          - {RTT_BSP: "microchip/same54", RTT_TOOL_CHAIN: "sourcery-arm"}
          - {RTT_BSP: "microchip/same70", RTT_TOOL_CHAIN: "sourcery-arm"}
          
-         - {RTT_BSP: "bluetrum/ab32vg1-ab-prougen", RTT_TOOL_CHAIN: "sourcery-riscv64-unknown-elf"}
+         #- {RTT_BSP: "bluetrum/ab32vg1-ab-prougen", RTT_TOOL_CHAIN: "sourcery-riscv64-unknown-elf"}
          - {RTT_BSP: "k210", RTT_TOOL_CHAIN: "sourcery-riscv-none-embed"}
          - {RTT_BSP: "qemu-virt64-aarch64", RTT_TOOL_CHAIN: "sourcery-aarch64"}
-         - {RTT_BSP: "raspberry-pi/raspi3-64", RTT_TOOL_CHAIN: "sourcery-aarch64"}
-         - {RTT_BSP: "raspberry-pi/raspi4-64", RTT_TOOL_CHAIN: "sourcery-aarch64"}
+         #- {RTT_BSP: "raspberry-pi/raspi3-64", RTT_TOOL_CHAIN: "sourcery-aarch64"}
+         #- {RTT_BSP: "raspberry-pi/raspi4-64", RTT_TOOL_CHAIN: "sourcery-aarch64"}
          - {RTT_BSP: "rockchip/rk3568", RTT_TOOL_CHAIN: "sourcery-aarch64"}
          
     steps:
