@@ -5,7 +5,7 @@ name: NIMBLE
 on:
   # Runs at 16:00 UTC (BeiJing 00:00) on the 1st of every month
   schedule:
-    - cron:  '0 16 1 * *'
+    - cron:  '0 9 1 * *'
   push:
     branches:
       - master
