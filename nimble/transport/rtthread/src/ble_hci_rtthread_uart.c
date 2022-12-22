@@ -66,7 +66,7 @@ static void rtthread_uart_tx(const uint8_t *buf, size_t len)
 
 static int rtthread_hci_uart_init(void)
 {
-    struct serial_configure config = RT_SERIAL_CONFIG_DEFAULT;  
+    struct serial_configure config = RT_SERIAL_CONFIG_DEFAULT;
 
     g_serial = rt_device_find(PKG_NIMBLE_HCI_UART_DEVICE_NAME);
     if (!g_serial) {
@@ -81,6 +81,9 @@ static int rtthread_hci_uart_init(void)
     config.bufsz     = 128;
 #endif
     config.parity    = PARITY_NONE;
+#ifdef PKG_NIMBLE_HCI_UART_FLOWCONTROL_CTSRTS
+    config.flowcontrol = RT_SERIAL_FLOWCONTROL_CTSRTS;
+#endif
 
     rt_device_control(g_serial, RT_DEVICE_CTRL_CONFIG, &config);
 
