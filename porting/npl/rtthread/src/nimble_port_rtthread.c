@@ -20,7 +20,7 @@ static rt_thread_t ll_task_h;
 extern void ble_ll_task(void *arg);
 
 #ifdef RT_DEBUG
-rt_weak void __aeabi_assert(const char *expr, const char *file, int line)
+RT_WEAK void __aeabi_assert(const char *expr, const char *file, int line)
 {
     rt_assert_handler(expr, file, line);
 }
